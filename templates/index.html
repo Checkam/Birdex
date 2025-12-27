@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Birdex</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Meta tags pour PWA -->
+    <meta name="theme-color" content="#ef4444">
+    <meta name="description" content="Suivez vos découvertes d'oiseaux comme un Pokédex ornithologique">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Birdex">
+
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel standalone for in-browser JSX transpilation (development only) -->
@@ -19,5 +34,60 @@
     <div id="root"></div>
     <!-- Load the app with Babel to transpile JSX in-browser (dev). For production, bundle instead. -->
     <script type="text/babel" src="/static/app.js?v=2.2" data-presets="react"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('✓ Service Worker enregistré:', registration.scope);
+
+                        // Vérifier les mises à jour du SW
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('Nouvelle version du Service Worker détectée');
+
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Nouvelle version disponible
+                                    console.log('Nouvelle version disponible. Rafraîchir pour mettre à jour.');
+
+                                    // Optionnel: Afficher une notification à l'utilisateur
+                                    if (confirm('Une nouvelle version de Birdex est disponible. Rafraîchir maintenant ?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => {
+                        console.log('✗ Erreur lors de l\'enregistrement du Service Worker:', err);
+                    });
+
+                // Recharger la page quand le SW est mis à jour
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
+                });
+            });
+        }
+
+        // Gestion de l'installation PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('✓ PWA installable détectée');
+
+            // Optionnel: Vous pouvez afficher un bouton d'installation personnalisé ici
+            // Par exemple, stocker l'événement pour l'utiliser plus tard avec un bouton
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('✓ PWA installée avec succès!');
+            deferredPrompt = null;
+        });
+    </script>
 </body>
 </html>

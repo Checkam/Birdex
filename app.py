@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, session, make_response
+from flask import Flask, jsonify, request, render_template, session, make_response, send_from_directory
 import json
 import sqlite3
 import hashlib
@@ -251,6 +251,28 @@ def index():
 @app.route('/share/<token>')
 def share_profile(token):
     return render_template('share.html')
+
+# ============================================================================
+# PWA SUPPORT
+# ============================================================================
+
+@app.route('/service-worker.js')
+@app.route('/sw.js')
+def service_worker():
+    """Serve service worker with correct MIME type"""
+    response = make_response(send_from_directory('static', 'sw.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/manifest.json')
+def manifest():
+    """Serve manifest with correct MIME type"""
+    response = make_response(send_from_directory('static', 'manifest.json'))
+    response.headers['Content-Type'] = 'application/manifest+json'
+    return response
+
+# ============================================================================
 
 @app.route('/api/birds')
 @cache.cached(timeout=600)
