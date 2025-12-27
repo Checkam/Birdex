@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.2';
-const RUNTIME_CACHE = 'birdex-runtime-v1.0.2';
+const CACHE_NAME = 'birdex-v1.0.3';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.3';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -52,13 +52,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Laisser passer les requêtes POST/PUT/DELETE sans intervention du Service Worker
-  // En les envoyant directement au réseau avec les credentials (cookies de session)
+  // En les envoyant directement au réseau (la requête originale contient déjà les credentials)
   if (request.method !== 'GET') {
-    event.respondWith(
-      fetch(request, {
-        credentials: 'same-origin'
-      })
-    );
+    event.respondWith(fetch(request));
     return;
   }
 
