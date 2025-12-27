@@ -1199,34 +1199,34 @@ const BirdPokedex = () => {
           </div>
 
           {/* Navigation */}
-          <div className={`${currentTheme.bgNav} p-2 flex gap-2 flex-wrap relative`}>
+          <div className={`${currentTheme.bgNav} p-2 flex gap-2 relative`}>
             <button
               onClick={() => setView('stats')}
-              className={`flex-1 ${currentTheme.btnSecondary} py-2 px-3 rounded font-bold transition flex items-center justify-center gap-1 text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
               <BarChart3 size={16} />
-              STATS
+              <span className="hidden sm:inline">STATS</span>
             </button>
             <button
               onClick={() => setView('gallery')}
-              className={`flex-1 ${currentTheme.btnSecondary} py-2 px-3 rounded font-bold transition flex items-center justify-center gap-1 text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
               <Camera size={16} />
-              GALERIE
+              <span className="hidden sm:inline">GALERIE</span>
             </button>
             <button
               onClick={() => setView('map')}
-              className={`flex-1 ${currentTheme.btnSecondary} py-2 px-3 rounded font-bold transition flex items-center justify-center gap-1 text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
               <MapIcon size={16} />
-              CARTE
+              <span className="hidden sm:inline">CARTE</span>
             </button>
 
             {/* Menu déroulant */}
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <button
                 onClick={() => setShowDropdownMenu(!showDropdownMenu)}
-                className={`${currentTheme.btnSecondary} py-2 px-4 rounded font-bold transition flex items-center justify-center gap-1 text-sm`}
+                className={`${currentTheme.btnSecondary} py-2 px-3 sm:px-4 rounded font-bold transition flex items-center justify-center text-lg`}
               >
                 ☰
               </button>
@@ -1934,7 +1934,7 @@ const BirdPokedex = () => {
 
                   {/* Galerie photos */}
                   <div>
-                    <h3 className="font-bold mb-3">Mes observations</h3>
+                    <h3 className={`font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Mes observations</h3>
                     <div className="grid grid-cols-1 gap-3">
                       {discoveries[selectedBird.number].photos?.map((photo, idx) => (
                         <div key={idx} className="bg-gray-100 rounded-lg overflow-hidden">
@@ -2532,7 +2532,7 @@ const BirdPokedex = () => {
 
                 {/* Liste des observations */}
                 <div className="p-6">
-                  <h3 className="font-bold mb-3">Liste des observations</h3>
+                  <h3 className={`font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Liste des observations</h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {allObservations.map((obs, idx) => (
                       <div
@@ -2791,27 +2791,27 @@ const BirdPokedex = () => {
 
                 {/* Liste des utilisateurs */}
                 <div>
-                  <h3 className="font-bold text-xl mb-4">📊 Détails des utilisateurs</h3>
+                  <h3 className={`font-bold text-xl mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>📊 Détails des utilisateurs</h3>
                   <div className="bg-white dark:bg-slate-700 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-slate-600">
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-gray-100 dark:bg-slate-600">
                           <tr>
-                            <th className="px-4 py-3 text-left text-sm font-bold">Utilisateur</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold">Inscription</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold">Découvertes</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold">Stockage</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Utilisateur</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Inscription</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Découvertes</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Stockage</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-slate-600">
                           {adminStats.users.map((u, idx) => (
                             <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-600">
-                              <td className="px-4 py-3 font-semibold">{u.username}</td>
-                              <td className="px-4 py-3 text-sm">{u.created_at}</td>
+                              <td className={`px-4 py-3 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{u.username}</td>
+                              <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.created_at}</td>
                               <td className="px-4 py-3 text-center">
                                 {u.has_discoveries ? '✅' : '❌'}
                               </td>
-                              <td className="px-4 py-3 text-sm">
+                              <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
                                 {u.storage_used ? `${(u.storage_used / 1024).toFixed(1)} KB` : '-'}
                               </td>
                             </tr>
