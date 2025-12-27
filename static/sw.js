@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.5';
-const RUNTIME_CACHE = 'birdex-runtime-v1.0.5';
+const CACHE_NAME = 'birdex-v1.0.6';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.6';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -51,21 +51,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Laisser passer les requêtes POST/PUT/DELETE sans intervention du Service Worker
-  // IMPORTANT: On clone la requête complète pour préserver le body et les credentials
+  // Laisser passer les requêtes POST/PUT/DELETE SANS toucher au Service Worker
+  // Ne PAS intercepter ces requêtes, les laisser passer directement
   if (request.method !== 'GET') {
-    event.respondWith(
-      fetch(request.clone(), {
-        credentials: 'same-origin'
-      }).catch(error => {
-        console.error('[SW] Erreur fetch POST:', error);
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
-    );
-    return;
+    return; // Ne rien faire, laisser le navigateur gérer
   }
 
   // Stratégie pour les API calls dynamiques (découvertes, auth, etc.): Network Only

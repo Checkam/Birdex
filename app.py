@@ -45,6 +45,9 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True  # Sécurité contre XSS
 app.config['SESSION_COOKIE_SAMESITE'] = None  # None pour PWA (au lieu de 'Lax')
 app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 jours en secondes
 
+# Augmenter la limite de taille pour les POST avec images
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+
 # Configuration du cache
 app.config['CACHE_TYPE'] = 'SimpleCache'
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300
