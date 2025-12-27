@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.0';
-const RUNTIME_CACHE = 'birdex-runtime';
+const CACHE_NAME = 'birdex-v1.0.1';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.1';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -51,29 +51,38 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Ne pas mettre en cache les requêtes POST/PUT/DELETE
+  // Laisser passer les requêtes POST/PUT/DELETE sans intervention du Service Worker
   if (request.method !== 'GET') {
+    // Ne rien faire - la requête passera normalement au réseau
     return;
   }
 
-  // Stratégie pour les API calls: Network First
+  // Stratégie pour les API calls dynamiques (découvertes, auth, etc.): Network Only
+  // On ne met PAS en cache ces endpoints pour toujours avoir les données à jour
+  if (url.pathname.startsWith('/api/discoveries') ||
+      url.pathname.startsWith('/api/auth') ||
+      url.pathname.startsWith('/api/theme') ||
+      url.pathname.startsWith('/api/share')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Stratégie pour les autres API calls (ex: /api/birds): Cache First avec Network Fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Clone la réponse car elle ne peut être consommée qu'une fois
-          const responseClone = response.clone();
+      caches.match(request)
+        .then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
 
-          // Met à jour le cache avec la nouvelle réponse
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
+          return fetch(request).then((response) => {
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(request, responseClone);
+            });
+            return response;
           });
-
-          return response;
-        })
-        .catch(() => {
-          // Si le réseau échoue, essaie de récupérer depuis le cache
-          return caches.match(request);
         })
     );
     return;
