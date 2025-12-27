@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.1';
-const RUNTIME_CACHE = 'birdex-runtime-v1.0.1';
+const CACHE_NAME = 'birdex-v1.1.0';
+const RUNTIME_CACHE = 'birdex-runtime-v1.1.0';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -7,6 +7,8 @@ const PRECACHE_URLS = [
   '/static/app.js',
   '/static/logo.png',
   '/static/manifest.json',
+  '/static/db.js',
+  '/static/sync-manager.js',
   // CDN resources (cache these for offline support)
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
@@ -180,15 +182,124 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Gestion de la synchronisation en arrière-plan (si supporté)
+// Gestion de la synchronisation en arrière-plan
 self.addEventListener('sync', (event) => {
+  console.log('[Service Worker] Sync event:', event.tag);
+
   if (event.tag === 'sync-discoveries') {
-    event.waitUntil(
-      // Ici on pourrait synchroniser les découvertes en attente
-      console.log('[Service Worker] Background sync triggered')
-    );
+    event.waitUntil(syncDiscoveries());
   }
 });
+
+/**
+ * Synchronise les découvertes en attente avec le serveur
+ */
+async function syncDiscoveries() {
+  try {
+    console.log('[Service Worker] Démarrage de la synchronisation...');
+
+    // Ouvrir IndexedDB
+    const db = await openIndexedDB();
+    const pendingItems = await getPendingFromDB(db);
+
+    if (pendingItems.length === 0) {
+      console.log('[Service Worker] Aucune donnée à synchroniser');
+      return;
+    }
+
+    console.log(`[Service Worker] ${pendingItems.length} élément(s) à synchroniser`);
+
+    // Regrouper les découvertes
+    const discoveries = {};
+    pendingItems.forEach(item => {
+      discoveries[item.bird_number] = item.data;
+    });
+
+    // Envoyer au serveur
+    const response = await fetch('/api/discoveries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(discoveries)
+    });
+
+    if (response.ok) {
+      // Marquer comme synchronisé
+      await markAsSyncedInDB(db, pendingItems);
+      console.log('[Service Worker] ✓ Synchronisation réussie');
+
+      // Notifier l'app
+      await notifyClients({ type: 'sync-success', count: pendingItems.length });
+    } else {
+      throw new Error(`Erreur serveur: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('[Service Worker] ✗ Erreur de synchronisation:', error);
+    await notifyClients({ type: 'sync-error', error: error.message });
+    throw error; // Re-throw pour que le navigateur réessaie
+  }
+}
+
+/**
+ * Ouvre la base IndexedDB
+ */
+function openIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('BirdexDB', 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Récupère les items en attente
+ */
+function getPendingFromDB(db) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['syncQueue'], 'readonly');
+    const store = tx.objectStore('syncQueue');
+    const index = store.index('status');
+    const request = index.getAll('pending');
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Marque les items comme synchronisés
+ */
+async function markAsSyncedInDB(db, items) {
+  const tx = db.transaction(['syncQueue', 'discoveries'], 'readwrite');
+  const syncStore = tx.objectStore('syncQueue');
+  const discoveriesStore = tx.objectStore('discoveries');
+
+  for (const item of items) {
+    // Supprimer de la queue
+    await syncStore.delete(item.id);
+
+    // Marquer comme syncé dans les découvertes
+    const discovery = await discoveriesStore.get(item.bird_number);
+    if (discovery) {
+      discovery.synced = true;
+      await discoveriesStore.put(discovery);
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Notifie tous les clients de l'app
+ */
+async function notifyClients(message) {
+  const clients = await self.clients.matchAll({ includeUncontrolled: true });
+  clients.forEach(client => {
+    client.postMessage(message);
+  });
+}
 
 // Notification push (préparation pour futures fonctionnalités)
 self.addEventListener('push', (event) => {

@@ -29,6 +29,10 @@
     <!-- Leaflet CSS et JS pour la carte -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Scripts pour le mode hors-ligne -->
+    <script src="/static/db.js"></script>
+    <script src="/static/sync-manager.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -87,6 +91,22 @@
         window.addEventListener('appinstalled', () => {
             console.log('✓ PWA installée avec succès!');
             deferredPrompt = null;
+        });
+
+        // Écouter les messages du Service Worker
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            console.log('[App] Message du Service Worker:', event.data);
+
+            if (event.data.type === 'sync-success') {
+                console.log(`✓ ${event.data.count} élément(s) synchronisé(s)`);
+                // L'app React peut écouter ces événements via window events
+                window.dispatchEvent(new CustomEvent('sync-success', { detail: event.data }));
+            }
+
+            if (event.data.type === 'sync-error') {
+                console.error('✗ Erreur de synchronisation:', event.data.error);
+                window.dispatchEvent(new CustomEvent('sync-error', { detail: event.data }));
+            }
         });
     </script>
 </body>
