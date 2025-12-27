@@ -601,11 +601,55 @@ const BirdPokedex = () => {
     console.log(message);
   };
 
+  const compressImage = (base64Image, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = base64Image;
+    });
+  };
+
   const saveDiscoveries = async (newDiscoveries) => {
-    const dataStr = JSON.stringify(newDiscoveries);
+    addDebugLog(`💾 Compression des images...`);
+
+    // Compresser toutes les images avant envoi
+    const compressed = {};
+    for (const [birdNum, birdData] of Object.entries(newDiscoveries)) {
+      compressed[birdNum] = { ...birdData };
+
+      if (birdData.photos && Array.isArray(birdData.photos)) {
+        compressed[birdNum].photos = await Promise.all(
+          birdData.photos.map(async (photo) => {
+            if (photo.photo && photo.photo.startsWith('data:image')) {
+              const compressedPhoto = await compressImage(photo.photo);
+              return { ...photo, photo: compressedPhoto };
+            }
+            return photo;
+          })
+        );
+      }
+    }
+
+    const dataStr = JSON.stringify(compressed);
     const sizeKB = (dataStr.length / 1024).toFixed(2);
 
-    addDebugLog(`💾 SAVE: ${Object.keys(newDiscoveries).length} oiseaux, ${sizeKB} KB`);
+    addDebugLog(`→ Taille: ${sizeKB} KB`);
 
     try {
       addDebugLog('→ Envoi fetch...');
