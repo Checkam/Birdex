@@ -414,6 +414,7 @@ const BirdPokedex = () => {
   const [imageViewer, setImageViewer] = useState(null); // { src: string, title: string } ou null
   const [galleryPage, setGalleryPage] = useState(1); // Pagination de la galerie
   const PHOTOS_PER_PAGE = 12; // Nombre de photos par page
+  const [debugLogs, setDebugLogs] = useState([]); // Logs pour admin
   const [settings, setSettings] = useState({
     numberingMode: 'alphabetical', // 'alphabetical' ou 'regional'
     defaultCountry: '',
@@ -594,37 +595,46 @@ const BirdPokedex = () => {
     }
   };
 
+  const addDebugLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-19), { timestamp, message, type }]);
+    console.log(message);
+  };
+
   const saveDiscoveries = async (newDiscoveries) => {
-    console.log('💾 SAVE:', Object.keys(newDiscoveries).length, 'oiseaux');
+    const dataStr = JSON.stringify(newDiscoveries);
+    const sizeKB = (dataStr.length / 1024).toFixed(2);
+
+    addDebugLog(`💾 SAVE: ${Object.keys(newDiscoveries).length} oiseaux, ${sizeKB} KB`);
 
     try {
+      addDebugLog('→ Envoi fetch...');
       const response = await fetch('/api/discoveries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         credentials: 'same-origin',
-        body: JSON.stringify(newDiscoveries)
+        body: dataStr
       });
 
-      console.log('→ Status:', response.status);
+      addDebugLog(`→ Réponse: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
-        console.error('❌ Erreur:', errorData);
-
-        if (response.status === 401) {
-          alert('❌ Session expirée. Reconnectez-vous.');
-        } else {
-          alert(`❌ Erreur: ${errorData.error || response.statusText}`);
-        }
+        const errorData = await response.json().catch(e => {
+          addDebugLog(`❌ Impossible de lire JSON: ${e.message}`, 'error');
+          return { error: 'Erreur inconnue' };
+        });
+        addDebugLog(`❌ ERREUR: ${errorData.error}`, 'error');
+        alert(`❌ Erreur ${response.status}: ${errorData.error}`);
         return;
       }
 
-      console.log('✅ Sauvegarde OK');
+      addDebugLog('✅ Sauvegarde réussie');
     } catch (error) {
-      console.error('❌ Erreur réseau:', error);
-      alert(`❌ Impossible de contacter le serveur: ${error.message}`);
+      addDebugLog(`❌ ${error.name}: ${error.message}`, 'error');
+      addDebugLog(`Stack: ${error.stack}`, 'error');
+      alert(`❌ ${error.name}: ${error.message}`);
     }
   };
 
@@ -2780,7 +2790,31 @@ const BirdPokedex = () => {
     );
   }
 
-  return null;
+  // Panneau de debug pour admin (visible partout)
+  const DebugPanel = () => {
+    if (!user?.is_admin || debugLogs.length === 0) return null;
+
+    return (
+      <div className="fixed bottom-4 right-4 z-50 bg-black bg-opacity-90 text-white p-3 rounded-lg max-w-md w-full max-h-64 overflow-y-auto text-xs font-mono shadow-2xl">
+        <div className="flex justify-between items-center mb-2 border-b border-gray-600 pb-2">
+          <span className="font-bold">🐛 Debug Logs (Admin)</span>
+          <button onClick={() => setDebugLogs([])} className="text-red-400 hover:text-red-300">✖</button>
+        </div>
+        {debugLogs.map((log, i) => (
+          <div key={i} className={`py-1 ${log.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+            <span className="text-gray-500">{log.timestamp}</span> {log.message}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <DebugPanel />
+      {null}
+    </>
+  );
 
   // Note: Le code ci-dessus ne devrait jamais être atteint car toutes les vues font un return
   // Le composant ImageViewer doit être ajouté dans chaque vue qui l'utilise
