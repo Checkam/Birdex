@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil partagé - Ornithédex</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        // Définition des thèmes
+        const themes = {
+            pokemon: {
+                bg: 'bg-red-600',
+                bgHeader: 'bg-red-700',
+                gradient: 'bg-gradient-to-r from-red-500 to-red-600',
+                text: 'text-white',
+                textSecondary: 'text-red-200',
+                card: 'bg-white',
+                border: 'border-gray-300',
+                statsCard1: 'bg-gradient-to-r from-red-500 to-red-600',
+                statsCard2: 'bg-gradient-to-r from-green-500 to-emerald-600',
+                statsCard3: 'bg-gradient-to-r from-orange-500 to-red-600'
+            },
+            dark: {
+                bg: 'bg-gradient-to-br from-slate-700 via-slate-800 to-gray-800',
+                bgHeader: 'bg-gradient-to-r from-slate-700 to-slate-800',
+                gradient: 'bg-gradient-to-r from-indigo-700 to-purple-700',
+                text: 'text-slate-100',
+                textSecondary: 'text-slate-300',
+                card: 'bg-slate-700 shadow-lg',
+                border: 'border-slate-600',
+                statsCard1: 'bg-gradient-to-r from-indigo-600 to-purple-600',
+                statsCard2: 'bg-gradient-to-r from-green-600 to-emerald-600',
+                statsCard3: 'bg-gradient-to-r from-orange-600 to-red-600'
+            },
+            white: {
+                bg: 'bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50',
+                bgHeader: 'bg-gradient-to-r from-blue-400 to-purple-500',
+                gradient: 'bg-gradient-to-r from-blue-400 to-purple-500',
+                text: 'text-white',
+                textSecondary: 'text-blue-100',
+                card: 'bg-white shadow-lg',
+                border: 'border-blue-200',
+                statsCard1: 'bg-gradient-to-r from-blue-400 to-purple-500',
+                statsCard2: 'bg-gradient-to-r from-green-400 to-emerald-500',
+                statsCard3: 'bg-gradient-to-r from-orange-400 to-red-500'
+            }
+        };
+
+        // Récupérer le token depuis l'URL
+        const token = window.location.pathname.split('/share/')[1];
+
+        // Charger les données du profil partagé
+        fetch(`/api/share/${token}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('root').innerHTML = `
+                        <div class="min-h-screen flex items-center justify-center bg-gray-100">
+                            <div class="text-center">
+                                <h1 class="text-4xl mb-4">❌</h1>
+                                <h2 class="text-2xl font-bold text-gray-800">Profil non trouvé</h2>
+                                <p class="text-gray-600 mt-2">Ce lien de partage n'existe pas ou a été révoqué.</p>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Charger les données des oiseaux
+                fetch('/static/oiseau.json')
+                    .then(res => res.json())
+                    .then(birds => {
+                        const sortedBirds = birds
+                            .filter(b => b.nom_francais && b.nom_scientifique)
+                            .sort((a, b) => a.nom_francais.localeCompare(b.nom_francais))
+                            .map((bird, idx) => ({
+                                ...bird,
+                                number: String(idx + 1).padStart(3, '0')
+                            }));
+
+                        renderProfile(data, sortedBirds);
+                    });
+            })
+            .catch(err => {
+                document.getElementById('root').innerHTML = `
+                    <div class="min-h-screen flex items-center justify-center bg-gray-100">
+                        <div class="text-center">
+                            <h1 class="text-4xl mb-4">⚠️</h1>
+                            <h2 class="text-2xl font-bold text-gray-800">Erreur de chargement</h2>
+                            <p class="text-gray-600 mt-2">Impossible de charger le profil.</p>
+                        </div>
+                    </div>
+                `;
+            });
+
+        function openImageModal(imageSrc, birdName) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4';
+            modal.onclick = () => modal.remove();
+
+            modal.innerHTML = `
+                <div class="relative max-w-6xl max-h-full" onclick="event.stopPropagation()">
+                    <button onclick="this.closest('.fixed').remove()" class="absolute -top-10 right-0 text-white text-2xl hover:text-gray-300">✕</button>
+                    <img src="${imageSrc}" alt="${birdName}" class="max-w-full max-h-[90vh] object-contain rounded-lg">
+                    <div class="text-white text-center mt-4 font-bold">${birdName}</div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+        }
+
+        function renderProfile(data, birds) {
+            const discoveredBirds = Object.keys(data.discoveries);
+            const theme = themes[data.theme] || themes.pokemon;
+
+            // Récupérer toutes les photos
+            const allPhotos = [];
+            Object.entries(data.discoveries).forEach(([birdNumber, birdData]) => {
+                const bird = birds.find(b => b.number === birdNumber);
+                if (bird && birdData.photos) {
+                    birdData.photos.forEach((photo) => {
+                        allPhotos.push({
+                            bird,
+                            photo,
+                            birdNumber
+                        });
+                    });
+                }
+            });
+
+            document.getElementById('root').innerHTML = `
+                <div class="min-h-screen ${theme.bg} p-4">
+                    <div class="max-w-6xl mx-auto">
+                        <!-- En-tête -->
+                        <div class="${theme.bgHeader} rounded-t-3xl p-6 ${theme.text}">
+                            <div class="flex items-center justify-between flex-wrap gap-4">
+                                <div>
+                                    <h1 class="text-3xl font-bold">🦅 ${data.username}</h1>
+                                    <p class="${theme.textSecondary} text-sm mt-1">Membre depuis ${new Date(data.member_since).toLocaleDateString('fr-FR')}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs opacity-80">Profil Public</div>
+                                    <div class="text-sm">Lecture seule 🔒</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Statistiques -->
+                        <div class="${theme.card} border-4 ${theme.border} p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div class="text-center ${theme.statsCard1} text-white rounded-lg p-4">
+                                    <div class="text-3xl font-bold">${data.discovered_count}</div>
+                                    <div class="text-xs opacity-80">Espèces découvertes</div>
+                                </div>
+                                <div class="text-center ${theme.statsCard2} text-white rounded-lg p-4">
+                                    <div class="text-3xl font-bold">${data.total_photos}</div>
+                                    <div class="text-xs opacity-80">Photos prises</div>
+                                </div>
+                                <div class="text-center ${theme.statsCard3} text-white rounded-lg p-4">
+                                    <div class="text-3xl font-bold">${birds.length}</div>
+                                    <div class="text-xs opacity-80">Total espèces</div>
+                                </div>
+                            </div>
+
+                            <!-- Navigation par onglets -->
+                            <div class="flex gap-2 mb-6 border-b-2 ${theme.border}">
+                                <button onclick="showTab('list')" id="tab-list" class="px-4 py-2 font-bold border-b-4 border-blue-500">
+                                    Liste des espèces
+                                </button>
+                                <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300">
+                                    Galerie photos (${allPhotos.length})
+                                </button>
+                            </div>
+
+                            <!-- Onglet Liste -->
+                            <div id="content-list">
+                                <h2 class="text-xl font-bold mb-4">Découvertes</h2>
+                                <div class="max-h-[600px] overflow-y-auto border-2 ${theme.border} rounded-lg">
+                                    ${birds.map(bird => {
+                                        const isDiscovered = discoveredBirds.includes(bird.number);
+                                        const discovery = data.discoveries[bird.number];
+
+                                        return `
+                                            <div class="flex items-center p-4 border-b ${theme.border} ${!isDiscovered ? 'opacity-40' : ''}">
+                                                <div class="w-16 text-gray-500 font-bold">#${bird.number}</div>
+                                                <div class="flex-1">
+                                                    <div class="font-bold ${!isDiscovered ? 'text-gray-400' : ''}">
+                                                        ${bird.nom_francais}
+                                                    </div>
+                                                    <div class="text-sm text-gray-500 italic">
+                                                        ${isDiscovered ? bird.nom_scientifique : '???'}
+                                                    </div>
+                                                </div>
+                                                ${isDiscovered ? `
+                                                    <div class="text-sm text-gray-600">
+                                                        📷 ${discovery.photos?.length || 0}
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Onglet Galerie -->
+                            <div id="content-gallery" class="hidden">
+                                ${allPhotos.length === 0 ? `
+                                    <div class="text-center py-12">
+                                        <p class="text-gray-500">Aucune photo disponible.</p>
+                                    </div>
+                                ` : `
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        ${allPhotos.map((item, idx) => `
+                                            <div class="bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow"
+                                                 onclick="openImageModal('${item.photo.photo}', '${item.bird.nom_francais}')">
+                                                <div class="relative">
+                                                    <img src="${item.photo.photo}" alt="${item.bird.nom_francais}" class="w-full h-48 object-cover">
+                                                    <div class="absolute top-2 left-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs font-bold">
+                                                        #${item.bird.number}
+                                                    </div>
+                                                    ${item.photo.sex ? `
+                                                        <div class="absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold ${
+                                                            item.photo.sex === 'male' ? 'bg-blue-500 text-white' :
+                                                            item.photo.sex === 'female' ? 'bg-pink-500 text-white' :
+                                                            'bg-gray-500 text-white'
+                                                        }">
+                                                            ${item.photo.sex === 'male' ? '♂' : item.photo.sex === 'female' ? '♀' : '?'}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                                <div class="p-3">
+                                                    <div class="font-bold text-sm mb-1">${item.bird.nom_francais}</div>
+                                                    <div class="text-xs text-gray-500 italic mb-2">${item.bird.nom_scientifique}</div>
+                                                    <div class="text-xs text-gray-600">${item.photo.date}</div>
+                                                    ${item.photo.country ? `
+                                                        <div class="text-xs text-gray-500 mt-1 truncate">
+                                                            🌍 ${item.photo.region}, ${item.photo.country}
+                                                        </div>
+                                                    ` : ''}
+                                                    ${item.photo.location ? `
+                                                        <div class="text-xs text-gray-500 mt-1 truncate">
+                                                            📍 ${item.photo.location}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `}
+                            </div>
+
+                            <!-- Footer -->
+                            <div class="mt-6 text-center text-sm text-gray-500">
+                                <p>Créez votre propre Ornithédex ! 🦅</p>
+                                <a href="/" class="text-blue-600 hover:underline font-bold">S'inscrire maintenant</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showTab(tabName) {
+            // Masquer tous les contenus
+            document.getElementById('content-list').classList.add('hidden');
+            document.getElementById('content-gallery').classList.add('hidden');
+
+            // Retirer la bordure active de tous les onglets
+            document.getElementById('tab-list').classList.remove('border-blue-500');
+            document.getElementById('tab-list').classList.add('border-transparent');
+            document.getElementById('tab-gallery').classList.remove('border-blue-500');
+            document.getElementById('tab-gallery').classList.add('border-transparent');
+
+            // Afficher le contenu sélectionné
+            document.getElementById('content-' + tabName).classList.remove('hidden');
+            document.getElementById('tab-' + tabName).classList.remove('border-transparent');
+            document.getElementById('tab-' + tabName).classList.add('border-blue-500');
+        }
+
+        // Expose la fonction pour qu'elle soit accessible globalement
+        window.openImageModal = openImageModal;
+        window.showTab = showTab;
+    </script>
+</body>
+</html>
