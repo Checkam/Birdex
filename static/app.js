@@ -532,7 +532,7 @@ const BirdPokedex = () => {
 
   const loadShareToken = async () => {
     try {
-      const response = await fetch('/api/share/token');
+      const response = await fetch('/api/share/token', { credentials: 'same-origin' });
       const data = await response.json();
       setShareToken(data.share_token);
     } catch (error) {
@@ -542,7 +542,7 @@ const BirdPokedex = () => {
 
   const loadAdminStats = async () => {
     try {
-      const response = await fetch('/api/admin/stats');
+      const response = await fetch('/api/admin/stats', { credentials: 'same-origin' });
       const data = await response.json();
       setAdminStats(data);
     } catch (error) {
@@ -552,7 +552,7 @@ const BirdPokedex = () => {
 
   const checkUserSession = async () => {
     try {
-      const response = await fetch('/api/auth/me');
+      const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
       const data = await response.json();
       if (data.logged_in) {
         setUser(data);
@@ -573,6 +573,7 @@ const BirdPokedex = () => {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ theme: newTheme })
       });
       setTheme(newTheme);
@@ -583,7 +584,7 @@ const BirdPokedex = () => {
 
   const loadDiscoveries = async () => {
     try {
-      const response = await fetch('/api/discoveries/light');
+      const response = await fetch('/api/discoveries/light', { credentials: 'same-origin' });
       if (response.ok) {
         const data = await response.json();
         setDiscoveries(data);
@@ -600,6 +601,7 @@ const BirdPokedex = () => {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'same-origin',
         body: JSON.stringify(newDiscoveries)
       });
     } catch (error) {
@@ -636,6 +638,7 @@ const BirdPokedex = () => {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ username, password })
       });
 
@@ -643,7 +646,7 @@ const BirdPokedex = () => {
       if (response.ok) {
         setUser(data);
         // Charger le thème de l'utilisateur
-        const userResponse = await fetch('/api/auth/me');
+        const userResponse = await fetch('/api/auth/me', { credentials: 'same-origin' });
         const userData = await userResponse.json();
         setTheme(userData.theme || 'pokemon');
         setView('list');
@@ -674,6 +677,7 @@ const BirdPokedex = () => {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ username, password })
       });
 
@@ -681,7 +685,7 @@ const BirdPokedex = () => {
       if (response.ok) {
         setUser(data);
         // Charger le thème de l'utilisateur
-        const userResponse = await fetch('/api/auth/me');
+        const userResponse = await fetch('/api/auth/me', { credentials: 'same-origin' });
         const userData = await userResponse.json();
         setTheme(userData.theme || 'pokemon');
         setView('list');
@@ -695,7 +699,7 @@ const BirdPokedex = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
       setUser(null);
       setDiscoveries({});
       setView('auth');
@@ -2494,7 +2498,7 @@ const BirdPokedex = () => {
       if (!confirm('Voulez-vous vraiment régénérer votre lien de partage ? L\'ancien lien ne fonctionnera plus.')) return;
 
       try {
-        const response = await fetch('/api/share/regenerate', { method: 'POST' });
+        const response = await fetch('/api/share/regenerate', { method: 'POST', credentials: 'same-origin' });
         const data = await response.json();
         setShareToken(data.share_token);
       } catch (error) {
