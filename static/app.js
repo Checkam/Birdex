@@ -2684,7 +2684,7 @@ const BirdPokedex = () => {
           <div className={`${currentTheme.card} border-4 ${currentTheme.border} p-6 space-y-6`}>
             {/* Thème */}
             <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
-              <h3 className="font-bold mb-3 flex items-center gap-2">
+              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
                 🎨 Thème d'affichage
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
@@ -2716,7 +2716,7 @@ const BirdPokedex = () => {
 
             {/* Informations */}
             <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
-              <h3 className="font-bold mb-2">ℹ️ Informations</h3>
+              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>ℹ️ Informations</h3>
               <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                 <p>• Le thème est sauvegardé automatiquement</p>
                 <p>• Les oiseaux sont organisés par région (France, Europe, Afrique, etc.)</p>
@@ -2726,7 +2726,7 @@ const BirdPokedex = () => {
 
             {/* Debug Session */}
             <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg p-4">
-              <h3 className="font-bold mb-2">🐛 Debug Session (Mobile)</h3>
+              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>🐛 Debug Session (Mobile)</h3>
               <button
                 onClick={async () => {
                   try {
