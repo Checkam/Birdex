@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.0';
-const RUNTIME_CACHE = 'birdex-runtime';
+const CACHE_NAME = 'birdex-v1.0.1';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.1';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -56,8 +56,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stratégie pour les API calls: Network First
+  // Stratégie pour les API calls
   if (url.pathname.startsWith('/api/')) {
+    // Ne JAMAIS mettre en cache les données utilisateur (découvertes, photos, auth, etc.)
+    // Ces données changent fréquemment et doivent toujours être à jour
+    const noCache = [
+      '/api/discoveries',
+      '/api/photo',
+      '/api/auth',
+      '/api/theme',
+      '/api/share',
+      '/api/admin'
+    ];
+
+    const shouldBypassCache = noCache.some(path => url.pathname.startsWith(path));
+
+    if (shouldBypassCache) {
+      // Network Only - Ne pas utiliser le cache
+      event.respondWith(fetch(request));
+      return;
+    }
+
+    // Pour /api/birds (données statiques): Network First avec cache
     event.respondWith(
       fetch(request)
         .then((response) => {
