@@ -595,8 +595,13 @@ const BirdPokedex = () => {
   };
 
   const saveDiscoveries = async (newDiscoveries) => {
+    console.log('🔵 [SAVE] Tentative de sauvegarde des découvertes...', {
+      birdsCount: Object.keys(newDiscoveries).length,
+      timestamp: new Date().toISOString()
+    });
+
     try {
-      await fetch('/api/discoveries', {
+      const response = await fetch('/api/discoveries', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -604,8 +609,31 @@ const BirdPokedex = () => {
         credentials: 'same-origin',
         body: JSON.stringify(newDiscoveries)
       });
+
+      console.log('🔵 [SAVE] Réponse reçue:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        console.error('🔴 [SAVE] Erreur serveur:', errorData);
+
+        // Afficher une alerte à l'utilisateur
+        if (response.status === 401) {
+          alert('❌ Session expirée. Veuillez vous reconnecter.');
+        } else {
+          alert(`❌ Erreur de sauvegarde: ${errorData.error || response.statusText}`);
+        }
+        return;
+      }
+
+      const result = await response.json();
+      console.log('✅ [SAVE] Sauvegarde réussie:', result);
     } catch (error) {
-      console.error('Erreur de sauvegarde:', error);
+      console.error('🔴 [SAVE] Erreur réseau:', error);
+      alert(`❌ Erreur réseau lors de la sauvegarde: ${error.message}`);
     }
   };
 
@@ -2649,6 +2677,30 @@ const BirdPokedex = () => {
                 <p>• Les oiseaux sont organisés par région (France, Europe, Afrique, etc.)</p>
                 <p>• La numérotation est unique et continue sur toute la liste</p>
               </div>
+            </div>
+
+            {/* Debug Session */}
+            <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg p-4">
+              <h3 className="font-bold mb-2">🐛 Debug Session (Mobile)</h3>
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/debug/session', { credentials: 'same-origin' });
+                    const data = await response.json();
+                    console.log('📊 DEBUG SESSION:', data);
+                    alert(JSON.stringify(data, null, 2));
+                  } catch (error) {
+                    console.error('Erreur debug:', error);
+                    alert('Erreur: ' + error.message);
+                  }
+                }}
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded"
+              >
+                🔍 Tester la session
+              </button>
+              <p className="text-xs mt-2 text-gray-600 dark:text-gray-300">
+                Ouvrez la console (F12) pour voir les logs détaillés
+              </p>
             </div>
           </div>
         </div>

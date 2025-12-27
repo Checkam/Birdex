@@ -11,6 +11,14 @@ from PIL import Image
 from functools import lru_cache, wraps
 from flask_caching import Cache
 from datetime import datetime
+import logging
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Obtenir le répertoire du script
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -31,9 +39,10 @@ else:
         f.write(app.secret_key)
 
 # Configuration des sessions avec cookies persistants
+# IMPORTANT: None pour SameSite permet aux cookies de fonctionner en mode PWA
 app.config['SESSION_COOKIE_SECURE'] = False  # Mettre True si HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Sécurité contre XSS
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Protection CSRF
+app.config['SESSION_COOKIE_SAMESITE'] = None  # None pour PWA (au lieu de 'Lax')
 app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 jours en secondes
 
 # Configuration du cache
@@ -135,6 +144,36 @@ def init_db():
 
 # Initialiser la DB au démarrage
 init_db()
+
+# ============================================================================
+# MIDDLEWARE DE LOGGING ET DEBUGGING
+# ============================================================================
+
+@app.before_request
+def log_request_info():
+    """Log toutes les requêtes entrantes pour debugging"""
+    logger.info('='*60)
+    logger.info(f'REQUEST: {request.method} {request.path}')
+    logger.info(f'Headers: {dict(request.headers)}')
+    logger.info(f'Cookies: {dict(request.cookies)}')
+    logger.info(f'Session: user_id={session.get("user_id")}, username={session.get("username")}')
+    if request.method in ['POST', 'PUT', 'PATCH']:
+        logger.info(f'Content-Type: {request.content_type}')
+        if request.is_json:
+            # Ne pas logger les données sensibles (photos)
+            data = request.get_json()
+            if data and not any(k in str(data) for k in ['photo', 'password']):
+                logger.info(f'JSON Data: {data}')
+            else:
+                logger.info(f'JSON Data: [CONTAINS SENSITIVE DATA - {len(str(data))} bytes]')
+
+@app.after_request
+def log_response_info(response):
+    """Log les réponses pour debugging"""
+    logger.info(f'RESPONSE: {response.status}')
+    logger.info(f'Response Headers: {dict(response.headers)}')
+    logger.info('='*60)
+    return response
 
 # ============================================================================
 # SYSTÈME DE COMPRESSION D'IMAGES OPTIMISÉ
@@ -366,6 +405,22 @@ def get_current_user():
     else:
         return jsonify({"logged_in": False})
 
+@app.route('/api/debug/session', methods=['GET'])
+def debug_session():
+    """Endpoint de debugging pour vérifier l'état de la session"""
+    return jsonify({
+        "session_data": dict(session),
+        "session_keys": list(session.keys()),
+        "has_user_id": 'user_id' in session,
+        "cookies": list(request.cookies.keys()),
+        "headers": {
+            "user-agent": request.headers.get('User-Agent'),
+            "origin": request.headers.get('Origin'),
+            "referer": request.headers.get('Referer'),
+            "cookie": bool(request.headers.get('Cookie'))
+        }
+    })
+
 # ============================================================================
 # GESTION DES DÉCOUVERTES (NOUVEAU SYSTÈME)
 # ============================================================================
@@ -444,13 +499,24 @@ def get_discoveries():
 @app.route('/api/discoveries', methods=['POST'])
 def save_discoveries():
     """Sauvegarde les découvertes (nouveau système)"""
+    logger.info("=== SAVE DISCOVERIES CALLED ===")
+    logger.info(f"Session data: {dict(session)}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request cookies: {dict(request.cookies)}")
+
     if 'user_id' not in session:
+        logger.error("ERREUR: Utilisateur non authentifié - session vide!")
+        logger.error(f"Session keys: {list(session.keys())}")
         return jsonify({"error": "Non authentifié"}), 401
 
     user_id = session['user_id']
+    logger.info(f"User ID from session: {user_id}")
+
     data = request.json
+    logger.info(f"Received data for {len(data) if data else 0} birds")
 
     if not data:
+        logger.error("ERREUR: Aucune donnée reçue")
         return jsonify({"error": "Aucune donnée"}), 400
 
     conn = get_db()
@@ -531,6 +597,7 @@ def save_discoveries():
                     ))
 
         conn.commit()
+        logger.info(f"✓ Données sauvegardées avec succès pour user_id={user_id}")
 
         # Invalider le cache
         cache.delete(f'discoveries_v2_{user_id}')
@@ -541,7 +608,7 @@ def save_discoveries():
 
     except Exception as e:
         conn.rollback()
-        print(f"Erreur sauvegarde: {e}")
+        logger.error(f"ERREUR lors de la sauvegarde: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
