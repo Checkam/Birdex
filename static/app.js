@@ -595,10 +595,7 @@ const BirdPokedex = () => {
   };
 
   const saveDiscoveries = async (newDiscoveries) => {
-    console.log('🔵 [SAVE] Tentative de sauvegarde des découvertes...', {
-      birdsCount: Object.keys(newDiscoveries).length,
-      timestamp: new Date().toISOString()
-    });
+    console.log('💾 SAVE:', Object.keys(newDiscoveries).length, 'oiseaux');
 
     try {
       const response = await fetch('/api/discoveries', {
@@ -610,30 +607,24 @@ const BirdPokedex = () => {
         body: JSON.stringify(newDiscoveries)
       });
 
-      console.log('🔵 [SAVE] Réponse reçue:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
+      console.log('→ Status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
-        console.error('🔴 [SAVE] Erreur serveur:', errorData);
+        console.error('❌ Erreur:', errorData);
 
-        // Afficher une alerte à l'utilisateur
         if (response.status === 401) {
-          alert('❌ Session expirée. Veuillez vous reconnecter.');
+          alert('❌ Session expirée. Reconnectez-vous.');
         } else {
-          alert(`❌ Erreur de sauvegarde: ${errorData.error || response.statusText}`);
+          alert(`❌ Erreur: ${errorData.error || response.statusText}`);
         }
         return;
       }
 
-      const result = await response.json();
-      console.log('✅ [SAVE] Sauvegarde réussie:', result);
+      console.log('✅ Sauvegarde OK');
     } catch (error) {
-      console.error('🔴 [SAVE] Erreur réseau:', error);
-      alert(`❌ Erreur réseau lors de la sauvegarde: ${error.message}`);
+      console.error('❌ Erreur réseau:', error);
+      alert(`❌ Impossible de contacter le serveur: ${error.message}`);
     }
   };
 

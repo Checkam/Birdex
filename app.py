@@ -151,28 +151,19 @@ init_db()
 
 @app.before_request
 def log_request_info():
-    """Log toutes les requêtes entrantes pour debugging"""
-    logger.info('='*60)
-    logger.info(f'REQUEST: {request.method} {request.path}')
-    logger.info(f'Headers: {dict(request.headers)}')
-    logger.info(f'Cookies: {dict(request.cookies)}')
-    logger.info(f'Session: user_id={session.get("user_id")}, username={session.get("username")}')
-    if request.method in ['POST', 'PUT', 'PATCH']:
-        logger.info(f'Content-Type: {request.content_type}')
-        if request.is_json:
-            # Ne pas logger les données sensibles (photos)
-            data = request.get_json()
-            if data and not any(k in str(data) for k in ['photo', 'password']):
-                logger.info(f'JSON Data: {data}')
-            else:
-                logger.info(f'JSON Data: [CONTAINS SENSITIVE DATA - {len(str(data))} bytes]')
+    """Log uniquement les POST pour debugging"""
+    if request.method == 'POST':
+        logger.info('='*60)
+        logger.info(f'POST {request.path}')
+        logger.info(f'Session: user_id={session.get("user_id")}')
+        logger.info(f'Cookies: {list(request.cookies.keys())}')
 
 @app.after_request
 def log_response_info(response):
-    """Log les réponses pour debugging"""
-    logger.info(f'RESPONSE: {response.status}')
-    logger.info(f'Response Headers: {dict(response.headers)}')
-    logger.info('='*60)
+    """Log uniquement les réponses POST"""
+    if request.method == 'POST':
+        logger.info(f'→ RESPONSE: {response.status}')
+        logger.info('='*60)
     return response
 
 # ============================================================================
@@ -499,25 +490,18 @@ def get_discoveries():
 @app.route('/api/discoveries', methods=['POST'])
 def save_discoveries():
     """Sauvegarde les découvertes (nouveau système)"""
-    logger.info("=== SAVE DISCOVERIES CALLED ===")
-    logger.info(f"Session data: {dict(session)}")
-    logger.info(f"Request headers: {dict(request.headers)}")
-    logger.info(f"Request cookies: {dict(request.cookies)}")
-
     if 'user_id' not in session:
-        logger.error("ERREUR: Utilisateur non authentifié - session vide!")
-        logger.error(f"Session keys: {list(session.keys())}")
+        logger.error(f"❌ Non authentifié - cookies: {list(request.cookies.keys())}")
         return jsonify({"error": "Non authentifié"}), 401
 
     user_id = session['user_id']
-    logger.info(f"User ID from session: {user_id}")
-
     data = request.json
-    logger.info(f"Received data for {len(data) if data else 0} birds")
 
     if not data:
-        logger.error("ERREUR: Aucune donnée reçue")
+        logger.error("❌ Aucune donnée reçue")
         return jsonify({"error": "Aucune donnée"}), 400
+
+    logger.info(f"💾 Saving {len(data)} birds for user_id={user_id}")
 
     conn = get_db()
     c = conn.cursor()

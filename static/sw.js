@@ -1,5 +1,5 @@
-const CACHE_NAME = 'birdex-v1.0.4';
-const RUNTIME_CACHE = 'birdex-runtime-v1.0.4';
+const CACHE_NAME = 'birdex-v1.0.5';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.5';
 
 // Ressources à mettre en cache lors de l'installation
 const PRECACHE_URLS = [
@@ -52,17 +52,17 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Laisser passer les requêtes POST/PUT/DELETE sans intervention du Service Worker
-  // IMPORTANT: On doit créer une nouvelle requête avec credentials explicites pour que
-  // les cookies de session soient envoyés correctement en mode PWA
+  // IMPORTANT: On clone la requête complète pour préserver le body et les credentials
   if (request.method !== 'GET') {
     event.respondWith(
-      fetch(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: request.method !== 'GET' && request.method !== 'HEAD' ? request.clone().body : null,
-        credentials: 'same-origin',
-        mode: 'same-origin',
-        cache: 'no-cache'
+      fetch(request.clone(), {
+        credentials: 'same-origin'
+      }).catch(error => {
+        console.error('[SW] Erreur fetch POST:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       })
     );
     return;
