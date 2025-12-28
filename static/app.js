@@ -408,6 +408,7 @@ const BirdPokedex = () => {
   const [theme, setTheme] = useState('dark');
   const [showPassword, setShowPassword] = useState(false); // Pour afficher/masquer le mot de passe
   const [shareToken, setShareToken] = useState(null); // Token de partage
+  const [showMap, setShowMap] = useState(true); // Afficher la carte sur le profil public
   const [adminStats, setAdminStats] = useState(null); // Statistiques admin
   const [adminMessages, setAdminMessages] = useState(null); // Messages admin
   const [geoFilter, setGeoFilter] = useState({ country: '', region: '' }); // Filtres géographiques
@@ -538,6 +539,7 @@ const BirdPokedex = () => {
       const response = await fetch('/api/share/token', { credentials: 'same-origin' });
       const data = await response.json();
       setShareToken(data.share_token);
+      setShowMap(data.show_map !== 0); // Convertir en boolean
     } catch (error) {
       console.error('Erreur chargement token:', error);
     }
@@ -1632,7 +1634,7 @@ const BirdPokedex = () => {
             {/* Filtres géographiques */}
             {allCountries.length > 0 && (
               <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4 mb-6">
-                <h4 className={`font-bold mb-3 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-800'}`}>🌍 Filtrer par localisation</h4>
+                <h4 className="font-bold mb-3 text-gray-800 dark:text-white">🌍 Filtrer par localisation</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <select
                     value={geoFilter.country}
@@ -2617,12 +2619,45 @@ const BirdPokedex = () => {
 
           <div className={`${currentTheme.card} border-4 ${currentTheme.border} p-6 space-y-6`}>
             <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-700">
-              <h3 className={`font-bold mb-2 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              <h3 className="font-bold mb-2 flex items-center gap-2 text-gray-800 dark:text-white">
                 🔒 Partage sécurisé
               </h3>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Votre lien de partage est unique et sécurisé. Les personnes qui visitent votre profil pourront voir vos découvertes en <strong>lecture seule</strong>.
               </p>
+            </div>
+
+            {/* Options de partage */}
+            <div className="bg-green-50 dark:bg-green-900 p-4 rounded-lg border-2 border-green-200 dark:border-green-700">
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
+                ⚙️ Options d'affichage
+              </h3>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMap}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked;
+                    setShowMap(newValue);
+                    try {
+                      await fetch('/api/share/show-map', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ show_map: newValue })
+                      });
+                    } catch (error) {
+                      console.error('Erreur mise à jour show_map:', error);
+                      setShowMap(!newValue); // Rollback en cas d'erreur
+                    }
+                  }}
+                  className="w-5 h-5 accent-green-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  <strong>Afficher la carte 🗺️</strong> sur mon profil public
+                  <p className="text-xs opacity-75 mt-1">La carte affiche toutes vos photos avec coordonnées GPS</p>
+                </span>
+              </label>
             </div>
 
             {shareToken && (
@@ -2665,7 +2700,7 @@ const BirdPokedex = () => {
             )}
 
             <div className="bg-yellow-50 dark:bg-yellow-900 p-4 rounded-lg border-2 border-yellow-200 dark:border-yellow-700">
-              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>💡 Astuce</h3>
+              <h3 className="font-bold mb-2 text-gray-800 dark:text-white">💡 Astuce</h3>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Si vous souhaitez révoquer l'accès à votre profil, régénérez simplement votre lien de partage. L'ancien lien cessera de fonctionner immédiatement.
               </p>
@@ -2696,10 +2731,10 @@ const BirdPokedex = () => {
           <div className={`${currentTheme.card} border-4 ${currentTheme.border} p-6 space-y-6`}>
             {/* Thème */}
             <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
-              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
                 🎨 Thème d'affichage
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                 Choisissez le thème visuel de l'application
               </p>
               <div className="grid grid-cols-3 gap-2">
@@ -2728,8 +2763,8 @@ const BirdPokedex = () => {
 
             {/* Informations */}
             <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
-              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>ℹ️ Informations</h3>
-              <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+              <h3 className="font-bold mb-2 text-gray-800 dark:text-white">ℹ️ Informations</h3>
+              <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                 <p>• Le thème est sauvegardé automatiquement</p>
                 <p>• Les oiseaux sont organisés par région (France, Europe, Afrique, etc.)</p>
                 <p>• La numérotation est unique et continue sur toute la liste</p>
@@ -2738,10 +2773,10 @@ const BirdPokedex = () => {
 
             {/* Contacter l'administrateur */}
             <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
-              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
                 📧 Contacter l'administrateur
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                 Besoin d'aide ? Mot de passe oublié ? Envoyez un message à l'admin.
               </p>
               <form onSubmit={async (e) => {
@@ -2813,7 +2848,7 @@ const BirdPokedex = () => {
 
             {/* Changer le mot de passe */}
             <div className="bg-green-50 dark:bg-green-900 rounded-lg p-4">
-              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
                 🔒 Changer le mot de passe
               </h3>
               <form onSubmit={async (e) => {
@@ -2904,7 +2939,7 @@ const BirdPokedex = () => {
             {/* Debug Session */}
             {user?.is_admin && (
               <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg p-4">
-                <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>🐛 Debug Session (Mobile)</h3>
+                <h3 className="font-bold mb-2 text-gray-800 dark:text-white">🐛 Debug Session (Mobile)</h3>
                 <button
                   onClick={async () => {
                     try {

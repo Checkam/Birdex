@@ -183,9 +183,11 @@
                                 <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">
                                     Galerie photos (${allPhotos.length})
                                 </button>
+                                ${data.show_map ? `
                                 <button onclick="showTab('map')" id="tab-map" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">
                                     🗺️ Carte
                                 </button>
+                                ` : ''}
                             </div>
 
                             <!-- Onglet Liste -->
@@ -219,9 +221,11 @@
                             </div>
 
                             <!-- Onglet Carte -->
+                            ${data.show_map ? `
                             <div id="content-map" class="hidden">
                                 <div id="shared-map" style="height: 600px; width: 100%;" class="rounded-lg"></div>
                             </div>
+                            ` : ''}
 
                             <!-- Onglet Galerie -->
                             <div id="content-gallery" class="hidden">
@@ -338,20 +342,30 @@
             // Masquer tous les contenus
             document.getElementById('content-list').classList.add('hidden');
             document.getElementById('content-gallery').classList.add('hidden');
-            document.getElementById('content-map').classList.add('hidden');
+            const mapContent = document.getElementById('content-map');
+            if (mapContent) mapContent.classList.add('hidden');
 
             // Retirer la bordure active de tous les onglets
             document.getElementById('tab-list').classList.remove('border-blue-500');
             document.getElementById('tab-list').classList.add('border-transparent');
             document.getElementById('tab-gallery').classList.remove('border-blue-500');
             document.getElementById('tab-gallery').classList.add('border-transparent');
-            document.getElementById('tab-map').classList.remove('border-blue-500');
-            document.getElementById('tab-map').classList.add('border-transparent');
+            const mapTab = document.getElementById('tab-map');
+            if (mapTab) {
+                mapTab.classList.remove('border-blue-500');
+                mapTab.classList.add('border-transparent');
+            }
 
             // Afficher le contenu sélectionné
-            document.getElementById('content-' + tabName).classList.remove('hidden');
-            document.getElementById('tab-' + tabName).classList.remove('border-transparent');
-            document.getElementById('tab-' + tabName).classList.add('border-blue-500');
+            const selectedContent = document.getElementById('content-' + tabName);
+            if (selectedContent) {
+                selectedContent.classList.remove('hidden');
+            }
+            const selectedTab = document.getElementById('tab-' + tabName);
+            if (selectedTab) {
+                selectedTab.classList.remove('border-transparent');
+                selectedTab.classList.add('border-blue-500');
+            }
 
             // Initialiser la carte si c'est l'onglet carte
             if (tabName === 'map' && window.sharedProfileData) {

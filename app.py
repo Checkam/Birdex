@@ -193,6 +193,27 @@ def init_db():
 # Initialiser la DB au démarrage
 init_db()
 
+# Migration: Ajouter la colonne show_map si elle n'existe pas
+def add_show_map_column():
+    """Ajoute la colonne show_map à la table users"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    try:
+        # Vérifier si la colonne existe déjà
+        c.execute("PRAGMA table_info(users)")
+        columns = [column[1] for column in c.fetchall()]
+
+        if 'show_map' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN show_map INTEGER DEFAULT 1")
+            conn.commit()
+            logger.info("✓ Colonne show_map ajoutée à la table users")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'ajout de la colonne show_map: {e}")
+    finally:
+        conn.close()
+
+add_show_map_column()
+
 # ============================================================================
 # MIDDLEWARE DE LOGGING ET DEBUGGING
 # ============================================================================
@@ -871,6 +892,29 @@ def update_theme():
 
     return jsonify({"status": "success", "theme": theme})
 
+@app.route('/api/share/show-map', methods=['POST'])
+def update_show_map():
+    """Active ou désactive l'affichage de la carte sur le profil public"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    data = request.json
+    show_map = data.get('show_map', 1)
+
+    # Convertir en entier (0 ou 1)
+    show_map = 1 if show_map else 0
+
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE users SET show_map = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+              (show_map, user_id))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"User {session['username']} a {'activé' if show_map else 'désactivé'} la carte sur son profil public")
+    return jsonify({"status": "success", "show_map": show_map})
+
 # ============================================================================
 # PARTAGE
 # ============================================================================
@@ -884,7 +928,7 @@ def get_share_token():
     conn = get_db()
     c = conn.cursor()
 
-    user = c.execute("SELECT share_token FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = c.execute("SELECT share_token, show_map FROM users WHERE id = ?", (user_id,)).fetchone()
 
     if not user or not user['share_token']:
         share_token = str(uuid.uuid4())
@@ -893,8 +937,10 @@ def get_share_token():
     else:
         share_token = user['share_token']
 
+    show_map = user['show_map'] if user['show_map'] is not None else 1
+
     conn.close()
-    return jsonify({"share_token": share_token})
+    return jsonify({"share_token": share_token, "show_map": show_map})
 
 @app.route('/api/share/regenerate', methods=['POST'])
 def regenerate_share_token():
@@ -918,7 +964,7 @@ def get_shared_profile(token):
     c = conn.cursor()
 
     user = c.execute("""
-        SELECT id, username, created_at, theme
+        SELECT id, username, created_at, theme, show_map
         FROM users
         WHERE share_token = ?
     """, (token,)).fetchone()
@@ -975,6 +1021,7 @@ def get_shared_profile(token):
         "username": user['username'],
         "member_since": user['created_at'],
         "theme": user['theme'] or 'pokemon',
+        "show_map": user['show_map'] if user['show_map'] is not None else 1,
         "discovered_count": len(discoveries_data),
         "total_photos": sum(len(d['photos']) for d in discoveries_data.values()),
         "discoveries": discoveries_data
