@@ -1204,21 +1204,21 @@ const BirdPokedex = () => {
               onClick={() => setView('stats')}
               className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <BarChart3 size={20} />
+              <span className="text-2xl">📊</span>
               <span className="hidden sm:inline">STATS</span>
             </button>
             <button
               onClick={() => setView('gallery')}
               className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <Camera size={20} />
+              <span className="text-2xl">🖼️</span>
               <span className="hidden sm:inline">GALERIE</span>
             </button>
             <button
               onClick={() => setView('map')}
               className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <MapIcon size={20} />
+              <span className="text-2xl">🗺️</span>
               <span className="hidden sm:inline">CARTE</span>
             </button>
 
