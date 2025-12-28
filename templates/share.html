@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profil partagé - Ornithédex</title>
+    <title>Profil partagé - Birdex</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS et JS pour la carte -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -82,6 +86,10 @@
                                 ...bird,
                                 number: String(idx + 1).padStart(3, '0')
                             }));
+
+                        // Stocker les données globalement pour la carte
+                        window.sharedProfileData = data;
+                        window.sharedBirdsData = sortedBirds;
 
                         renderProfile(data, sortedBirds);
                     });
@@ -169,17 +177,20 @@
 
                             <!-- Navigation par onglets -->
                             <div class="flex gap-2 mb-6 border-b-2 ${theme.border}">
-                                <button onclick="showTab('list')" id="tab-list" class="px-4 py-2 font-bold border-b-4 border-blue-500">
+                                <button onclick="showTab('list')" id="tab-list" class="px-4 py-2 font-bold border-b-4 border-blue-500 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">
                                     Liste des espèces
                                 </button>
-                                <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300">
+                                <button onclick="showTab('gallery')" id="tab-gallery" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">
                                     Galerie photos (${allPhotos.length})
+                                </button>
+                                <button onclick="showTab('map')" id="tab-map" class="px-4 py-2 font-bold border-b-4 border-transparent hover:border-blue-300 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">
+                                    🗺️ Carte
                                 </button>
                             </div>
 
                             <!-- Onglet Liste -->
                             <div id="content-list">
-                                <h2 class="text-xl font-bold mb-4">Découvertes</h2>
+                                <h2 class="text-xl font-bold mb-4 ${data.theme === 'dark' ? 'text-white' : 'text-gray-800'}">Découvertes</h2>
                                 <div class="max-h-[600px] overflow-y-auto border-2 ${theme.border} rounded-lg">
                                     ${birds.map(bird => {
                                         const isDiscovered = discoveredBirds.includes(bird.number);
@@ -187,17 +198,17 @@
 
                                         return `
                                             <div class="flex items-center p-4 border-b ${theme.border} ${!isDiscovered ? 'opacity-40' : ''}">
-                                                <div class="w-16 text-gray-500 font-bold">#${bird.number}</div>
+                                                <div class="w-16 ${data.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} font-bold">#${bird.number}</div>
                                                 <div class="flex-1">
-                                                    <div class="font-bold ${!isDiscovered ? 'text-gray-400' : ''}">
+                                                    <div class="font-bold ${!isDiscovered ? 'text-gray-400' : (data.theme === 'dark' ? 'text-white' : 'text-gray-800')}">
                                                         ${bird.nom_francais}
                                                     </div>
-                                                    <div class="text-sm text-gray-500 italic">
+                                                    <div class="text-sm ${data.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} italic">
                                                         ${isDiscovered ? bird.nom_scientifique : '???'}
                                                     </div>
                                                 </div>
                                                 ${isDiscovered ? `
-                                                    <div class="text-sm text-gray-600">
+                                                    <div class="text-sm ${data.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}">
                                                         📷 ${discovery.photos?.length || 0}
                                                     </div>
                                                 ` : ''}
@@ -207,11 +218,16 @@
                                 </div>
                             </div>
 
+                            <!-- Onglet Carte -->
+                            <div id="content-map" class="hidden">
+                                <div id="shared-map" style="height: 600px; width: 100%;" class="rounded-lg"></div>
+                            </div>
+
                             <!-- Onglet Galerie -->
                             <div id="content-gallery" class="hidden">
                                 ${allPhotos.length === 0 ? `
                                     <div class="text-center py-12">
-                                        <p class="text-gray-500">Aucune photo disponible.</p>
+                                        <p class="${data.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}">Aucune photo disponible.</p>
                                     </div>
                                 ` : `
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -255,8 +271,8 @@
                             </div>
 
                             <!-- Footer -->
-                            <div class="mt-6 text-center text-sm text-gray-500">
-                                <p>Créez votre propre Ornithédex ! 🦅</p>
+                            <div class="mt-6 text-center text-sm ${data.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}">
+                                <p>Créez votre propre Birdex ! 🦅</p>
                                 <a href="/" class="text-blue-600 hover:underline font-bold">S'inscrire maintenant</a>
                             </div>
                         </div>
@@ -265,26 +281,88 @@
             `;
         }
 
+        let sharedMapInstance = null;
+
+        function initSharedMap(discoveries, birds) {
+            // Attendre que le DOM soit prêt
+            setTimeout(() => {
+                if (sharedMapInstance) {
+                    sharedMapInstance.remove();
+                }
+
+                const mapElement = document.getElementById('shared-map');
+                if (!mapElement) return;
+
+                sharedMapInstance = L.map('shared-map').setView([46.2276, 2.2137], 6);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(sharedMapInstance);
+
+                // Ajouter les marqueurs pour toutes les photos avec coordonnées
+                Object.entries(discoveries).forEach(([birdNumber, birdData]) => {
+                    const bird = birds.find(b => b.number === birdNumber);
+                    if (!bird || !birdData.photos) return;
+
+                    birdData.photos.forEach(photo => {
+                        if (photo.coordinates && typeof photo.coordinates === 'object' && photo.coordinates.lat && photo.coordinates.lng) {
+                            const marker = L.marker([photo.coordinates.lat, photo.coordinates.lng])
+                                .addTo(sharedMapInstance);
+
+                            let popupContent = \`
+                                <div class="text-center">
+                                    <strong>\${bird.nom_francais}</strong><br>
+                                    <em class="text-sm text-gray-600">\${bird.nom_scientifique}</em><br>
+                                    <span class="text-xs">\${photo.date || ''}</span>
+                            \`;
+
+                            if (photo.photo) {
+                                popupContent += \`<br><img src="\${photo.photo}" style="max-width: 200px; max-height: 150px; margin-top: 8px; border-radius: 4px;" />\`;
+                            }
+
+                            popupContent += '</div>';
+
+                            marker.bindPopup(popupContent);
+                        }
+                    });
+                });
+
+                // Forcer un resize de la carte
+                setTimeout(() => {
+                    sharedMapInstance.invalidateSize();
+                }, 100);
+            }, 100);
+        }
+
         function showTab(tabName) {
             // Masquer tous les contenus
             document.getElementById('content-list').classList.add('hidden');
             document.getElementById('content-gallery').classList.add('hidden');
+            document.getElementById('content-map').classList.add('hidden');
 
             // Retirer la bordure active de tous les onglets
             document.getElementById('tab-list').classList.remove('border-blue-500');
             document.getElementById('tab-list').classList.add('border-transparent');
             document.getElementById('tab-gallery').classList.remove('border-blue-500');
             document.getElementById('tab-gallery').classList.add('border-transparent');
+            document.getElementById('tab-map').classList.remove('border-blue-500');
+            document.getElementById('tab-map').classList.add('border-transparent');
 
             // Afficher le contenu sélectionné
             document.getElementById('content-' + tabName).classList.remove('hidden');
             document.getElementById('tab-' + tabName).classList.remove('border-transparent');
             document.getElementById('tab-' + tabName).classList.add('border-blue-500');
+
+            // Initialiser la carte si c'est l'onglet carte
+            if (tabName === 'map' && window.sharedProfileData) {
+                initSharedMap(window.sharedProfileData.discoveries, window.sharedBirdsData);
+            }
         }
 
-        // Expose la fonction pour qu'elle soit accessible globalement
+        // Expose les fonctions pour qu'elles soient accessibles globalement
         window.openImageModal = openImageModal;
         window.showTab = showTab;
+        window.initSharedMap = initSharedMap;
     </script>
 </body>
 </html>
