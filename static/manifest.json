@@ -1,7 +1,7 @@
 {
   "name": "Birdex - Pokedex des Oiseaux",
   "short_name": "Birdex",
-  "description": "Suivez vos découvertes d'oiseaux comme un Pokédex ornithologique",
+  "description": "Suivez vos découvertes d'oiseaux avec Birdex",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
