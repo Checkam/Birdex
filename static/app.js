@@ -1477,7 +1477,7 @@ const BirdPokedex = () => {
             {/* Statistiques géographiques */}
             {totalPhotosByGeo > 0 && (
               <div className="bg-purple-50 dark:bg-purple-900 rounded-lg p-4">
-                <h4 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-800'}`}>
+                <h4 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
                   🌍 Statistiques géographiques
                 </h4>
 
@@ -2994,8 +2994,9 @@ const BirdPokedex = () => {
                     <div className="text-sm opacity-80 mt-2">Utilisateurs</div>
                   </div>
                   <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg p-6 text-center">
-                    <div className="text-4xl font-bold">{adminStats.total_discoveries}</div>
-                    <div className="text-sm opacity-80 mt-2">Profils actifs</div>
+                    <div className="text-4xl font-bold">{adminStats.active_users || 0}</div>
+                    <div className="text-sm opacity-80 mt-2">Utilisateurs actifs</div>
+                    <div className="text-xs opacity-60 mt-1">(avec photos)</div>
                   </div>
                   <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg p-6 text-center">
                     <div className="text-4xl font-bold">{adminStats.storage_mb} MB</div>
@@ -3014,6 +3015,7 @@ const BirdPokedex = () => {
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Utilisateur</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Inscription</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Découvertes</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Photos</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Stockage</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Actions</th>
                           </tr>
@@ -3025,6 +3027,13 @@ const BirdPokedex = () => {
                               <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.created_at}</td>
                               <td className="px-4 py-3 text-center">
                                 {u.discoveries_count > 0 ? `✅ ${u.discoveries_count}` : '❌'}
+                              </td>
+                              <td className={`px-4 py-3 text-center ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
+                                {u.photos_count > 0 ? (
+                                  <span className={u.photos_count >= 10000 ? 'text-red-600 font-bold' : ''}>
+                                    📷 {u.photos_count} {u.photos_count >= 10000 ? '⚠️ MAX' : ''}
+                                  </span>
+                                ) : '❌'}
                               </td>
                               <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
                                 {u.storage_used ? `${(u.storage_used / (1024 * 1024)).toFixed(1)} MB` : '-'}

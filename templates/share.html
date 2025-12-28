@@ -313,15 +313,13 @@
                             const marker = L.marker([photo.coordinates.lat, photo.coordinates.lng])
                                 .addTo(sharedMapInstance);
 
-                            let popupContent = \`
-                                <div class="text-center">
-                                    <strong>\${bird.nom_francais}</strong><br>
-                                    <em class="text-sm text-gray-600">\${bird.nom_scientifique}</em><br>
-                                    <span class="text-xs">\${photo.date || ''}</span>
-                            \`;
+                            let popupContent = '<div class="text-center">' +
+                                '<strong>' + bird.nom_francais + '</strong><br>' +
+                                '<em class="text-sm text-gray-600">' + bird.nom_scientifique + '</em><br>' +
+                                '<span class="text-xs">' + (photo.date || '') + '</span>';
 
                             if (photo.photo) {
-                                popupContent += \`<br><img src="\${photo.photo}" style="max-width: 200px; max-height: 150px; margin-top: 8px; border-radius: 4px;" />\`;
+                                popupContent += '<br><img src="' + photo.photo + '" style="max-width: 200px; max-height: 150px; margin-top: 8px; border-radius: 4px;" />';
                             }
 
                             popupContent += '</div>';

@@ -577,6 +577,16 @@ def save_discoveries():
     c = conn.cursor()
 
     try:
+        # Vérifier la limite de 10000 photos par utilisateur
+        current_photo_count = c.execute("""
+            SELECT COUNT(*) as count FROM photos WHERE user_id = ?
+        """, (user_id,)).fetchone()['count']
+
+        if current_photo_count >= 10000:
+            conn.close()
+            logger.warning(f"⚠️ User {user_id} a atteint la limite de 10000 photos")
+            return jsonify({"error": "Limite de 10000 photos atteinte. Veuillez supprimer des photos avant d'en ajouter de nouvelles."}), 400
+
         # Pour chaque oiseau découvert
         for bird_number, bird_data in data.items():
             # Créer ou récupérer la découverte
@@ -1051,6 +1061,12 @@ def get_admin_stats():
     total_discoveries = c.execute("SELECT COUNT(*) as count FROM discoveries").fetchone()['count']
     total_photos = c.execute("SELECT COUNT(*) as count FROM photos").fetchone()['count']
 
+    # Utilisateurs actifs = utilisateurs avec au moins 1 photo
+    active_users = c.execute("""
+        SELECT COUNT(DISTINCT user_id) as count
+        FROM photos
+    """).fetchone()['count']
+
     storage = c.execute("SELECT SUM(file_size) as total FROM photos").fetchone()
     storage_mb = (storage['total'] or 0) / (1024 * 1024)
 
@@ -1070,6 +1086,7 @@ def get_admin_stats():
 
     return jsonify({
         "total_users": total_users,
+        "active_users": active_users,
         "total_discoveries": total_discoveries,
         "total_photos": total_photos,
         "storage_mb": round(storage_mb, 2),
