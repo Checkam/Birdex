@@ -1202,23 +1202,23 @@ const BirdPokedex = () => {
           <div className={`${currentTheme.bgNav} p-2 flex gap-2 relative`}>
             <button
               onClick={() => setView('stats')}
-              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-3 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <BarChart3 className="w-6 h-6 sm:w-4 sm:h-4" />
+              <BarChart3 size={20} />
               <span className="hidden sm:inline">STATS</span>
             </button>
             <button
               onClick={() => setView('gallery')}
-              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-3 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <Camera className="w-6 h-6 sm:w-4 sm:h-4" />
+              <Camera size={20} />
               <span className="hidden sm:inline">GALERIE</span>
             </button>
             <button
               onClick={() => setView('map')}
-              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-3 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
+              className={`flex-1 min-w-0 ${currentTheme.btnSecondary} py-2 px-2 rounded font-bold transition flex items-center justify-center gap-1 text-xs sm:text-sm`}
             >
-              <MapIcon className="w-6 h-6 sm:w-4 sm:h-4" />
+              <MapIcon size={20} />
               <span className="hidden sm:inline">CARTE</span>
             </button>
 
