@@ -409,6 +409,7 @@ const BirdPokedex = () => {
   const [showPassword, setShowPassword] = useState(false); // Pour afficher/masquer le mot de passe
   const [shareToken, setShareToken] = useState(null); // Token de partage
   const [adminStats, setAdminStats] = useState(null); // Statistiques admin
+  const [adminMessages, setAdminMessages] = useState(null); // Messages admin
   const [geoFilter, setGeoFilter] = useState({ country: '', region: '' }); // Filtres géographiques
   const [geoDisplayMode, setGeoDisplayMode] = useState('all'); // 'all', 'country', 'region'
   const [imageViewer, setImageViewer] = useState(null); // { src: string, title: string } ou null
@@ -520,6 +521,7 @@ const BirdPokedex = () => {
   useEffect(() => {
     if (view === 'admin' && user?.is_admin) {
       loadAdminStats();
+      loadAdminMessages();
     }
   }, [view, user]);
 
@@ -548,6 +550,16 @@ const BirdPokedex = () => {
       setAdminStats(data);
     } catch (error) {
       console.error('Erreur chargement stats:', error);
+    }
+  };
+
+  const loadAdminMessages = async () => {
+    try {
+      const response = await fetch('/api/messages/list', { credentials: 'same-origin' });
+      const data = await response.json();
+      setAdminMessages(data);
+    } catch (error) {
+      console.error('Erreur chargement messages:', error);
     }
   };
 
@@ -2724,29 +2736,196 @@ const BirdPokedex = () => {
               </div>
             </div>
 
-            {/* Debug Session */}
-            <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg p-4">
-              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>🐛 Debug Session (Mobile)</h3>
-              <button
-                onClick={async () => {
-                  try {
-                    const response = await fetch('/api/debug/session', { credentials: 'same-origin' });
-                    const data = await response.json();
-                    console.log('📊 DEBUG SESSION:', data);
-                    alert(JSON.stringify(data, null, 2));
-                  } catch (error) {
-                    console.error('Erreur debug:', error);
-                    alert('Erreur: ' + error.message);
-                  }
-                }}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded"
-              >
-                🔍 Tester la session
-              </button>
-              <p className="text-xs mt-2 text-gray-600 dark:text-gray-300">
-                Ouvrez la console (F12) pour voir les logs détaillés
+            {/* Contacter l'administrateur */}
+            <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
+              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                📧 Contacter l'administrateur
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                Besoin d'aide ? Mot de passe oublié ? Envoyez un message à l'admin.
               </p>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const subject = formData.get('subject');
+                const message = formData.get('message');
+
+                try {
+                  const response = await fetch('/api/messages/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ subject, message })
+                  });
+
+                  const data = await response.json();
+
+                  if (response.ok) {
+                    alert('✅ ' + data.message);
+                    e.target.reset();
+                  } else {
+                    alert('❌ ' + data.error);
+                  }
+                } catch (error) {
+                  console.error('Erreur:', error);
+                  alert('❌ Erreur lors de l\'envoi du message');
+                }
+              }} className="space-y-3">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                    Sujet (3-100 caractères)
+                  </label>
+                  <input
+                    type="text"
+                    name="subject"
+                    required
+                    minLength="3"
+                    maxLength="100"
+                    placeholder="Ex: Mot de passe oublié"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                    Message (10-1000 caractères)
+                  </label>
+                  <textarea
+                    name="message"
+                    required
+                    minLength="10"
+                    maxLength="1000"
+                    rows="4"
+                    placeholder="Décrivez votre demande..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition"
+                >
+                  📨 Envoyer le message
+                </button>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  ⚠️ Limite : 3 messages par heure
+                </p>
+              </form>
             </div>
+
+            {/* Changer le mot de passe */}
+            <div className="bg-green-50 dark:bg-green-900 rounded-lg p-4">
+              <h3 className={`font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                🔒 Changer le mot de passe
+              </h3>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const currentPassword = formData.get('current_password');
+                const newPassword = formData.get('new_password');
+                const confirmPassword = formData.get('confirm_password');
+
+                if (newPassword !== confirmPassword) {
+                  alert('Les nouveaux mots de passe ne correspondent pas');
+                  return;
+                }
+
+                if (newPassword.length < 6) {
+                  alert('Le mot de passe doit contenir au moins 6 caractères');
+                  return;
+                }
+
+                try {
+                  const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                      current_password: currentPassword,
+                      new_password: newPassword
+                    })
+                  });
+
+                  const data = await response.json();
+
+                  if (response.ok) {
+                    alert('✅ Mot de passe changé avec succès !');
+                    e.target.reset();
+                  } else {
+                    alert('❌ ' + data.error);
+                  }
+                } catch (error) {
+                  console.error('Erreur:', error);
+                  alert('❌ Erreur lors du changement de mot de passe');
+                }
+              }} className="space-y-3">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                    Mot de passe actuel
+                  </label>
+                  <input
+                    type="password"
+                    name="current_password"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                    Nouveau mot de passe
+                  </label>
+                  <input
+                    type="password"
+                    name="new_password"
+                    required
+                    minLength="6"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>
+                    Confirmer le nouveau mot de passe
+                  </label>
+                  <input
+                    type="password"
+                    name="confirm_password"
+                    required
+                    minLength="6"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition"
+                >
+                  🔐 Changer le mot de passe
+                </button>
+              </form>
+            </div>
+
+            {/* Debug Session */}
+            {user?.is_admin && (
+              <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg p-4">
+                <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>🐛 Debug Session (Mobile)</h3>
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/debug/session', { credentials: 'same-origin' });
+                      const data = await response.json();
+                      console.log('📊 DEBUG SESSION:', data);
+                      alert(JSON.stringify(data, null, 2));
+                    } catch (error) {
+                      console.error('Erreur debug:', error);
+                      alert('Erreur: ' + error.message);
+                    }
+                  }}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded"
+                >
+                  🔍 Tester la session
+                </button>
+                <p className="text-xs mt-2 text-gray-600 dark:text-gray-300">
+                  Ouvrez la console (F12) pour voir les logs détaillés
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2801,6 +2980,7 @@ const BirdPokedex = () => {
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Inscription</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Découvertes</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Stockage</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-slate-600">
@@ -2809,10 +2989,41 @@ const BirdPokedex = () => {
                               <td className={`px-4 py-3 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{u.username}</td>
                               <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.created_at}</td>
                               <td className="px-4 py-3 text-center">
-                                {u.has_discoveries ? '✅' : '❌'}
+                                {u.discoveries_count > 0 ? `✅ ${u.discoveries_count}` : '❌'}
                               </td>
                               <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
-                                {u.storage_used ? `${(u.storage_used / 1024).toFixed(1)} KB` : '-'}
+                                {u.storage_used ? `${(u.storage_used / (1024 * 1024)).toFixed(1)} MB` : '-'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`⚠️ Réinitialiser le mot de passe de "${u.username}" ?\n\nUn nouveau mot de passe temporaire sera généré.`)) {
+                                      return;
+                                    }
+
+                                    try {
+                                      const response = await fetch(`/api/admin/reset-password/${u.id}`, {
+                                        method: 'POST',
+                                        credentials: 'same-origin'
+                                      });
+
+                                      const data = await response.json();
+
+                                      if (response.ok) {
+                                        alert(`✅ Mot de passe réinitialisé pour ${data.username}\n\n🔑 Mot de passe temporaire:\n${data.temporary_password}\n\n⚠️ Communiquez ce mot de passe à l'utilisateur de manière sécurisée.`);
+                                      } else {
+                                        alert('❌ Erreur: ' + data.error);
+                                      }
+                                    } catch (error) {
+                                      console.error('Erreur:', error);
+                                      alert('❌ Erreur lors de la réinitialisation du mot de passe');
+                                    }
+                                  }}
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1 rounded transition"
+                                  title="Réinitialiser le mot de passe"
+                                >
+                                  🔒 Reset MDP
+                                </button>
                               </td>
                             </tr>
                           ))}
@@ -2821,6 +3032,86 @@ const BirdPokedex = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Messages des utilisateurs */}
+                {adminMessages && (
+                  <div>
+                    <h3 className={`font-bold text-xl mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                      📨 Messages ({adminMessages.unread > 0 && <span className="text-red-500">{adminMessages.unread} non lu(s)</span>})
+                    </h3>
+                    {adminMessages.messages.length > 0 ? (
+                      <div className="space-y-3">
+                        {adminMessages.messages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`border-2 rounded-lg p-4 ${
+                              msg.is_read
+                                ? 'bg-gray-50 dark:bg-slate-700 border-gray-300 dark:border-slate-600'
+                                : 'bg-blue-50 dark:bg-blue-900 border-blue-400 dark:border-blue-600'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                                  {msg.is_read ? '' : '🔵 '}{msg.subject}
+                                </h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  De: {msg.username} • {new Date(msg.created_at).toLocaleString('fr-FR')}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                {!msg.is_read && (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await fetch(`/api/messages/mark-read/${msg.id}`, {
+                                          method: 'POST',
+                                          credentials: 'same-origin'
+                                        });
+                                        loadAdminMessages(); // Recharger les messages
+                                      } catch (error) {
+                                        console.error('Erreur:', error);
+                                      }
+                                    }}
+                                    className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1 rounded"
+                                    title="Marquer comme lu"
+                                  >
+                                    ✓
+                                  </button>
+                                )}
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('Supprimer ce message ?')) return;
+                                    try {
+                                      await fetch(`/api/messages/delete/${msg.id}`, {
+                                        method: 'DELETE',
+                                        credentials: 'same-origin'
+                                      });
+                                      loadAdminMessages(); // Recharger les messages
+                                    } catch (error) {
+                                      console.error('Erreur:', error);
+                                    }
+                                  }}
+                                  className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded"
+                                  title="Supprimer"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                            <p className={`text-sm whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                              {msg.message}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-gray-100 dark:bg-slate-700 rounded-lg">
+                        <p className="text-gray-500 dark:text-gray-400">Aucun message</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-center py-12">

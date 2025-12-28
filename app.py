@@ -155,6 +155,22 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )''')
 
+    # Table des messages (contact utilisateur -> admin)
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+
+    # Index pour optimiser les requêtes
+    c.execute('CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(is_read)')
+
     # Créer le compte admin par défaut s'il n'existe pas
     admin_username = 'admin'
     admin_password = 'policebox2025#'
@@ -992,7 +1008,7 @@ def get_admin_stats():
     storage_mb = (storage['total'] or 0) / (1024 * 1024)
 
     user_stats = c.execute("""
-        SELECT u.username, u.created_at,
+        SELECT u.id, u.username, u.created_at,
                COUNT(DISTINCT d.id) as discoveries_count,
                COUNT(p.id) as photos_count,
                SUM(p.file_size) as storage_used
@@ -1033,6 +1049,248 @@ def promote_user(user_id):
     conn.close()
 
     return jsonify({"status": "success"})
+
+@app.route('/api/admin/reset-password/<int:user_id>', methods=['POST'])
+@limiter.limit("10 per hour")
+def admin_reset_password(user_id):
+    """Admin peut réinitialiser le mot de passe d'un utilisateur"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier que c'est un admin
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?",
+                     (session['user_id'],)).fetchone()
+
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    # Vérifier que l'utilisateur cible existe
+    target_user = c.execute("SELECT username FROM users WHERE id = ?",
+                           (user_id,)).fetchone()
+
+    if not target_user:
+        conn.close()
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+
+    # Générer un mot de passe temporaire
+    temp_password = secrets.token_urlsafe(12)  # Mot de passe aléatoire sécurisé
+    password_hash = hash_password(temp_password)
+
+    # Mettre à jour le mot de passe
+    c.execute("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+              (password_hash, user_id))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"Admin {session['username']} a réinitialisé le mot de passe de l'utilisateur {target_user['username']}")
+
+    return jsonify({
+        "status": "success",
+        "username": target_user['username'],
+        "temporary_password": temp_password,
+        "message": "Mot de passe réinitialisé. Communiquez ce mot de passe temporaire à l'utilisateur."
+    })
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def change_password():
+    """Permet à un utilisateur de changer son propre mot de passe"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    data = request.json
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+
+    if not current_password or not new_password:
+        return jsonify({"error": "Mot de passe actuel et nouveau requis"}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"error": "Le nouveau mot de passe doit contenir au moins 6 caractères"}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier le mot de passe actuel
+    user = c.execute("SELECT password_hash FROM users WHERE id = ?",
+                    (session['user_id'],)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+
+    current_hash = hash_password(current_password)
+    if current_hash != user['password_hash']:
+        conn.close()
+        return jsonify({"error": "Mot de passe actuel incorrect"}), 401
+
+    # Mettre à jour avec le nouveau mot de passe
+    new_hash = hash_password(new_password)
+    c.execute("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+              (new_hash, session['user_id']))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"Utilisateur {session['username']} a changé son mot de passe")
+
+    return jsonify({"status": "success", "message": "Mot de passe changé avec succès"})
+
+# ============================================================================
+# SYSTÈME DE MESSAGERIE (CONTACT UTILISATEUR -> ADMIN)
+# ============================================================================
+
+@app.route('/api/messages/send', methods=['POST'])
+@limiter.limit("3 per hour")  # Limite stricte pour éviter le spam
+def send_message():
+    """Permet à un utilisateur d'envoyer un message à l'admin"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    data = request.json
+    subject = sanitize_input(data.get('subject', ''))
+    message = sanitize_input(data.get('message', ''))
+
+    if not subject or not message:
+        return jsonify({"error": "Sujet et message requis"}), 400
+
+    if len(subject) < 3 or len(subject) > 100:
+        return jsonify({"error": "Le sujet doit contenir entre 3 et 100 caractères"}), 400
+
+    if len(message) < 10 or len(message) > 1000:
+        return jsonify({"error": "Le message doit contenir entre 10 et 1000 caractères"}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+
+    try:
+        c.execute("""
+            INSERT INTO messages (user_id, username, subject, message)
+            VALUES (?, ?, ?, ?)
+        """, (session['user_id'], session['username'], subject, message))
+        conn.commit()
+
+        logger.info(f"Message reçu de {session['username']}: {subject[:50]}")
+
+        return jsonify({
+            "status": "success",
+            "message": "Message envoyé avec succès. L'administrateur vous répondra prochainement."
+        })
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Erreur envoi message: {e}")
+        return jsonify({"error": "Erreur lors de l'envoi du message"}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/messages/list', methods=['GET'])
+def get_messages():
+    """Admin: Récupérer tous les messages"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier que c'est un admin
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?",
+                     (session['user_id'],)).fetchone()
+
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    # Récupérer tous les messages, triés par date (plus récents en premier)
+    messages = c.execute("""
+        SELECT id, user_id, username, subject, message, is_read, created_at
+        FROM messages
+        ORDER BY is_read ASC, created_at DESC
+    """).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        "messages": [dict(row) for row in messages],
+        "total": len(messages),
+        "unread": sum(1 for m in messages if not m['is_read'])
+    })
+
+@app.route('/api/messages/mark-read/<int:message_id>', methods=['POST'])
+def mark_message_read(message_id):
+    """Admin: Marquer un message comme lu"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier que c'est un admin
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?",
+                     (session['user_id'],)).fetchone()
+
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    # Marquer le message comme lu
+    c.execute("UPDATE messages SET is_read = 1 WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
+
+@app.route('/api/messages/delete/<int:message_id>', methods=['DELETE'])
+@limiter.limit("20 per hour")
+def delete_message(message_id):
+    """Admin: Supprimer un message"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier que c'est un admin
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?",
+                     (session['user_id'],)).fetchone()
+
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    # Supprimer le message
+    c.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"Admin {session['username']} a supprimé le message {message_id}")
+
+    return jsonify({"status": "success"})
+
+@app.route('/api/messages/unread-count', methods=['GET'])
+def get_unread_count():
+    """Admin: Récupérer le nombre de messages non lus"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Vérifier que c'est un admin
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?",
+                     (session['user_id'],)).fetchone()
+
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"unread": 0})
+
+    # Compter les messages non lus
+    unread = c.execute("SELECT COUNT(*) as count FROM messages WHERE is_read = 0").fetchone()
+    conn.close()
+
+    return jsonify({"unread": unread['count'] if unread else 0})
 
 # ============================================================================
 # MIGRATION DEPUIS L'ANCIEN SYSTÈME
