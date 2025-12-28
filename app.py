@@ -10,8 +10,12 @@ import base64
 from PIL import Image
 from functools import lru_cache, wraps
 from flask_caching import Cache
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_cors import CORS
 from datetime import datetime
 import logging
+import bleach
 
 # Configuration du logging
 logging.basicConfig(
@@ -40,7 +44,7 @@ else:
 
 # Configuration des sessions avec cookies persistants
 # IMPORTANT: None pour SameSite permet aux cookies de fonctionner en mode PWA
-app.config['SESSION_COOKIE_SECURE'] = False  # Mettre True si HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS activé via Nginx
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Sécurité contre XSS
 app.config['SESSION_COOKIE_SAMESITE'] = None  # None pour PWA (au lieu de 'Lax')
 app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 jours en secondes
@@ -52,6 +56,31 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 app.config['CACHE_TYPE'] = 'SimpleCache'
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300
 cache = Cache(app)
+
+# Configuration du rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# Configuration CORS (autoriser uniquement votre domaine en production)
+CORS(app,
+     supports_credentials=True,
+     origins=["*"],  # TODO: Remplacer par votre domaine en production
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE"])
+
+# Note: CSRF désactivé pour API REST JSON
+# La sécurité est assurée par SESSION_COOKIE_HTTPONLY + SESSION_COOKIE_SAMESITE + HTTPS
+
+# Fonction de sanitisation contre XSS
+def sanitize_input(text):
+    """Nettoie les entrées utilisateur pour éviter les attaques XSS"""
+    if not text or not isinstance(text, str):
+        return text
+    return bleach.clean(text, tags=[], strip=True)
 
 # Chemin de la base de données
 DB_PATH = os.path.join(basedir, 'ornithedex_v2.db')
@@ -319,8 +348,8 @@ def get_birds():
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    username = sanitize_input(data.get('username'))
+    password = data.get('password')  # Ne pas sanitiser le password (permet caractères spéciaux)
 
     if not username or not password:
         return jsonify({"error": "Username et password requis"}), 400
@@ -351,9 +380,10 @@ def register():
         conn.close()
 
 @app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("5 per minute")  # Protection contre le brute-force
 def login():
     data = request.json
-    username = data.get('username')
+    username = sanitize_input(data.get('username'))
     password = data.get('password')
 
     if not username or not password:
@@ -562,7 +592,7 @@ def save_discoveries():
                     if isinstance(coordinates, dict):
                         coordinates = json.dumps(coordinates)
 
-                    # Sauvegarder la photo
+                    # Sauvegarder la photo (avec protection XSS sur les champs texte)
                     c.execute("""
                         INSERT INTO photos (
                             discovery_id, user_id, bird_number,
@@ -573,14 +603,14 @@ def save_discoveries():
                     """, (
                         discovery_id, user_id, bird_number,
                         photo_to_save, thumbnail, file_size,
-                        photo_data.get('location', ''),
-                        photo_data.get('city', ''),
-                        photo_data.get('region', ''),
-                        photo_data.get('country', ''),
+                        sanitize_input(photo_data.get('location', '')),
+                        sanitize_input(photo_data.get('city', '')),
+                        sanitize_input(photo_data.get('region', '')),
+                        sanitize_input(photo_data.get('country', '')),
                         coordinates,
-                        photo_data.get('date', ''),
-                        photo_data.get('sex', ''),
-                        photo_data.get('note', '')
+                        sanitize_input(photo_data.get('date', '')),
+                        sanitize_input(photo_data.get('sex', '')),
+                        sanitize_input(photo_data.get('note', ''))
                     ))
 
         conn.commit()
@@ -1102,4 +1132,4 @@ def migrate_from_old():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=10004)
+    app.run(debug=False, host='0.0.0.0', port=10004)

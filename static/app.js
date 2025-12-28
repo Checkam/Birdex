@@ -2605,7 +2605,7 @@ const BirdPokedex = () => {
 
           <div className={`${currentTheme.card} border-4 ${currentTheme.border} p-6 space-y-6`}>
             <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-700">
-              <h3 className="font-bold mb-2 flex items-center gap-2">
+              <h3 className={`font-bold mb-2 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
                 🔒 Partage sécurisé
               </h3>
               <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -2616,13 +2616,13 @@ const BirdPokedex = () => {
             {shareToken && (
               <>
                 <div>
-                  <label className="block font-bold mb-2">Votre lien de partage</label>
+                  <label className={`block font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Votre lien de partage</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={shareUrl}
                       readOnly
-                      className="flex-1 p-2 border-2 border-gray-300 rounded bg-gray-50 font-mono text-sm"
+                      className={`flex-1 p-2 border-2 rounded font-mono text-sm ${theme === 'dark' ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
                     />
                     <button
                       onClick={copyToClipboard}
@@ -2653,7 +2653,7 @@ const BirdPokedex = () => {
             )}
 
             <div className="bg-yellow-50 dark:bg-yellow-900 p-4 rounded-lg border-2 border-yellow-200 dark:border-yellow-700">
-              <h3 className="font-bold mb-2">💡 Astuce</h3>
+              <h3 className={`font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>💡 Astuce</h3>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Si vous souhaitez révoquer l'accès à votre profil, régénérez simplement votre lien de partage. L'ancien lien cessera de fonctionner immédiatement.
               </p>
