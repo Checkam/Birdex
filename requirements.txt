@@ -3,7 +3,6 @@ Flask==3.0.3
 
 # Security
 flask-cors==6.0.1
-Flask-Limiter==4.1.1
 bleach==6.2.0
 
 # Performance & Caching

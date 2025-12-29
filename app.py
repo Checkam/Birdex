@@ -10,8 +10,7 @@ import base64
 from PIL import Image
 from functools import lru_cache, wraps
 from flask_caching import Cache
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+import time
 from flask_cors import CORS
 from datetime import datetime
 import logging
@@ -57,14 +56,6 @@ app.config['CACHE_TYPE'] = 'SimpleCache'
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300
 cache = Cache(app)
 
-# Configuration du rate limiting
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
-
 # Configuration CORS (autoriser uniquement votre domaine en production)
 CORS(app,
      supports_credentials=True,
@@ -81,6 +72,17 @@ def sanitize_input(text):
     if not text or not isinstance(text, str):
         return text
     return bleach.clean(text, tags=[], strip=True)
+
+# Décorateur pour ajouter un délai de connexion
+def login_delay(seconds=2):
+    """Ajoute un délai avant l'exécution de la fonction pour prévenir les attaques par force brute"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            time.sleep(seconds)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 # Chemin de la base de données
 DB_PATH = os.path.join(basedir, 'ornithedex_v2.db')
@@ -417,7 +419,7 @@ def register():
         conn.close()
 
 @app.route('/api/auth/login', methods=['POST'])
-@limiter.limit("5 per minute")  # Protection contre le brute-force
+@login_delay(2)  # Protection contre le brute-force
 def login():
     data = request.json
     username = sanitize_input(data.get('username'))
@@ -1115,7 +1117,7 @@ def promote_user(user_id):
     return jsonify({"status": "success"})
 
 @app.route('/api/admin/reset-password/<int:user_id>', methods=['POST'])
-@limiter.limit("10 per hour")
+@login_delay(1)
 def admin_reset_password(user_id):
     """Admin peut réinitialiser le mot de passe d'un utilisateur"""
     if 'user_id' not in session:
@@ -1160,7 +1162,7 @@ def admin_reset_password(user_id):
     })
 
 @app.route('/api/auth/change-password', methods=['POST'])
-@limiter.limit("5 per hour")
+@login_delay(2)
 def change_password():
     """Permet à un utilisateur de changer son propre mot de passe"""
     if 'user_id' not in session:
@@ -1208,7 +1210,7 @@ def change_password():
 # ============================================================================
 
 @app.route('/api/messages/send', methods=['POST'])
-@limiter.limit("3 per hour")  # Limite stricte pour éviter le spam
+@login_delay(1)  # Délai pour éviter le spam
 def send_message():
     """Permet à un utilisateur d'envoyer un message à l'admin"""
     if 'user_id' not in session:
@@ -1307,7 +1309,7 @@ def mark_message_read(message_id):
     return jsonify({"status": "success"})
 
 @app.route('/api/messages/delete/<int:message_id>', methods=['DELETE'])
-@limiter.limit("20 per hour")
+@login_delay(0.5)
 def delete_message(message_id):
     """Admin: Supprimer un message"""
     if 'user_id' not in session:
