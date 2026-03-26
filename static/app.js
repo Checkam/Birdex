@@ -397,7 +397,7 @@ const themes = {
 const BirdPokedex = () => {
   const [birds, setBirds] = useState([]);
   const [discoveries, setDiscoveries] = useState({});
-  const [view, setView] = useState('list'); // 'list', 'stats', 'detail', 'capture', 'map', 'auth', 'edit', 'share', 'admin'
+  const [view, setView] = useState('list'); // 'list', 'stats', 'detail', 'capture', 'map', 'auth', 'edit', 'share', 'admin', 'profiles'
   const [selectedBird, setSelectedBird] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [user, setUser] = useState(null);
@@ -417,6 +417,11 @@ const BirdPokedex = () => {
   const [galleryPage, setGalleryPage] = useState(1); // Pagination de la galerie
   const PHOTOS_PER_PAGE = 12; // Nombre de photos par page
   const [debugLogs, setDebugLogs] = useState([]); // Logs pour admin
+  const [publicProfiles, setPublicProfiles] = useState([]); // Liste des profils publics
+  const [shareDiscoveryModal, setShareDiscoveryModal] = useState(null); // { bird, photo } ou null
+  const [adminViewUserPhotos, setAdminViewUserPhotos] = useState(null); // { username, photos } ou null
+  const [profileVisits, setProfileVisits] = useState(0); // Nb visites profil public
+  const [isPublic, setIsPublic] = useState(true); // Profil visible publiquement
   const [settings, setSettings] = useState({
     numberingMode: 'alphabetical', // 'alphabetical' ou 'regional'
     defaultCountry: '',
@@ -518,6 +523,13 @@ const BirdPokedex = () => {
     }
   }, [view, user]);
 
+  // Charger les profils publics
+  useEffect(() => {
+    if (view === 'profiles') {
+      loadPublicProfiles();
+    }
+  }, [view]);
+
   // Charger les stats admin quand on accède à la vue admin
   useEffect(() => {
     if (view === 'admin' && user?.is_admin) {
@@ -539,9 +551,21 @@ const BirdPokedex = () => {
       const response = await fetch('/api/share/token', { credentials: 'same-origin' });
       const data = await response.json();
       setShareToken(data.share_token);
-      setShowMap(data.show_map !== 0); // Convertir en boolean
+      setShowMap(data.show_map !== 0);
+      setProfileVisits(data.profile_visits || 0);
+      setIsPublic(data.is_public !== false);
     } catch (error) {
       console.error('Erreur chargement token:', error);
+    }
+  };
+
+  const loadPublicProfiles = async () => {
+    try {
+      const response = await fetch('/api/profiles');
+      const data = await response.json();
+      setPublicProfiles(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Erreur chargement profils:', error);
     }
   };
 
@@ -842,8 +866,13 @@ const BirdPokedex = () => {
       }
     };
 
+    const isNewDiscovery = !discoveries[selectedBird.number];
+
     setDiscoveries(newDiscoveries);
     saveDiscoveries(newDiscoveries);
+
+    const capturedPhoto = captureData.photoPreview;
+    const capturedBird = selectedBird;
 
     setCaptureData({
       photo: null,
@@ -855,6 +884,13 @@ const BirdPokedex = () => {
       note: ''
     });
     setView('detail');
+
+    // Proposer le partage si c'est une nouvelle découverte
+    if (isNewDiscovery && capturedPhoto) {
+      setTimeout(() => {
+        setShareDiscoveryModal({ bird: capturedBird, photo: capturedPhoto });
+      }, 300);
+    }
   };
 
   const handleEditSave = async () => {
@@ -1247,6 +1283,15 @@ const BirdPokedex = () => {
 
               {showDropdownMenu && (
                 <div className={`absolute right-0 top-12 ${theme === 'dark' ? 'bg-slate-700' : 'bg-white'} border-2 ${currentTheme.border} rounded-lg shadow-xl z-50 min-w-[150px]`}>
+                  <button
+                    onClick={() => {
+                      setView('profiles');
+                      setShowDropdownMenu(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 ${theme === 'dark' ? 'hover:bg-slate-600 text-slate-100' : 'hover:bg-gray-100 text-gray-800'} transition font-bold border-b ${currentTheme.border}`}
+                  >
+                    🌍 Profils publics
+                  </button>
                   <button
                     onClick={() => {
                       setView('share');
@@ -2579,6 +2624,99 @@ const BirdPokedex = () => {
     );
   }
 
+  // Vue Profils publics
+  if (view === 'profiles') {
+    const formatLastActivity = (ts) => {
+      if (!ts) return 'Jamais connecté';
+      const date = new Date(ts);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffH = Math.floor(diffMin / 60);
+      const diffD = Math.floor(diffH / 24);
+      if (diffMin < 2) return 'En ligne';
+      if (diffMin < 60) return `Il y a ${diffMin} min`;
+      if (diffH < 24) return `Il y a ${diffH}h`;
+      if (diffD < 7) return `Il y a ${diffD}j`;
+      return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    return (
+      <div className={`min-h-screen ${currentTheme.bg} p-4`}>
+        <div className="max-w-4xl mx-auto">
+          <div className={`${currentTheme.bgHeader} rounded-t-3xl p-6`}>
+            <button
+              onClick={() => setView('list')}
+              className={`flex items-center gap-2 ${currentTheme.text} mb-4 hover:opacity-80`}
+            >
+              <ChevronLeft size={24} />
+              Retour
+            </button>
+            <h2 className={`text-2xl font-bold ${currentTheme.text}`}>🌍 Profils publics</h2>
+            <p className={`${currentTheme.textSecondary} text-sm`}>Découvrez les naturalistes de la communauté</p>
+          </div>
+
+          <div className={`${currentTheme.card} border-4 ${currentTheme.border} p-4`}>
+            {publicProfiles.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-5xl mb-4">🐦</div>
+                <p className={`${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>Aucun profil public pour l'instant</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {publicProfiles.map((profile, idx) => (
+                  <a
+                    key={idx}
+                    href={`/share/${profile.share_token}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block rounded-2xl overflow-hidden border-2 ${currentTheme.border} shadow-md hover:shadow-xl transition-shadow cursor-pointer`}
+                  >
+                    {/* Photo de profil */}
+                    <div className="relative h-40 bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
+                      {profile.profile_photo ? (
+                        <img
+                          src={profile.profile_photo}
+                          alt={profile.username}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-6xl">🦅</div>
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                        <p className="text-white font-bold text-lg leading-tight">{profile.username}</p>
+                        <p className="text-white/70 text-xs">{formatLastActivity(profile.last_activity)}</p>
+                      </div>
+                    </div>
+                    {/* Stats */}
+                    <div className={`${theme === 'dark' ? 'bg-slate-700' : 'bg-white'} p-3 flex justify-around`}>
+                      <div className="text-center">
+                        <div className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{profile.discovered_count}</div>
+                        <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Espèces</div>
+                      </div>
+                      <div className={`border-l ${currentTheme.border}`}></div>
+                      <div className="text-center">
+                        <div className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{profile.photos_count}</div>
+                        <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Photos</div>
+                      </div>
+                      <div className={`border-l ${currentTheme.border}`}></div>
+                      <div className="text-center">
+                        <div className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                          {new Date(profile.member_since).getFullYear()}
+                        </div>
+                        <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Depuis</div>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Vue Partage
   if (view === 'share') {
     const regenerateToken = async () => {
@@ -2627,37 +2765,74 @@ const BirdPokedex = () => {
               </p>
             </div>
 
+            {/* Statistiques de visites */}
+            <div className={`p-4 rounded-lg border-2 ${theme === 'dark' ? 'bg-purple-900 border-purple-700' : 'bg-purple-50 border-purple-200'}`}>
+              <h3 className={`font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>👁️ Visites de votre profil</h3>
+              <p className={`text-3xl font-bold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`}>{profileVisits}</p>
+              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>
+                visiteur{profileVisits !== 1 ? 's' : ''} au total (hors vous-même)
+              </p>
+            </div>
+
             {/* Options de partage */}
             <div className="bg-green-50 dark:bg-green-900 p-4 rounded-lg border-2 border-green-200 dark:border-green-700">
               <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white">
                 ⚙️ Options d'affichage
               </h3>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showMap}
-                  onChange={async (e) => {
-                    const newValue = e.target.checked;
-                    setShowMap(newValue);
-                    try {
-                      await fetch('/api/share/show-map', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({ show_map: newValue })
-                      });
-                    } catch (error) {
-                      console.error('Erreur mise à jour show_map:', error);
-                      setShowMap(!newValue); // Rollback en cas d'erreur
-                    }
-                  }}
-                  className="w-5 h-5 accent-green-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  <strong>Afficher la carte 🗺️</strong> sur mon profil public
-                  <p className="text-xs opacity-75 mt-1">La carte affiche toutes vos photos avec coordonnées GPS</p>
-                </span>
-              </label>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showMap}
+                    onChange={async (e) => {
+                      const newValue = e.target.checked;
+                      setShowMap(newValue);
+                      try {
+                        await fetch('/api/share/show-map', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'same-origin',
+                          body: JSON.stringify({ show_map: newValue })
+                        });
+                      } catch (error) {
+                        console.error('Erreur mise à jour show_map:', error);
+                        setShowMap(!newValue);
+                      }
+                    }}
+                    className="w-5 h-5 accent-green-600"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <strong>Afficher la carte 🗺️</strong> sur mon profil public
+                    <p className="text-xs opacity-75 mt-1">La carte affiche toutes vos photos avec coordonnées GPS</p>
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPublic}
+                    onChange={async (e) => {
+                      const newValue = e.target.checked;
+                      setIsPublic(newValue);
+                      try {
+                        await fetch('/api/profile/visibility', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'same-origin',
+                          body: JSON.stringify({ is_public: newValue })
+                        });
+                      } catch (error) {
+                        console.error('Erreur mise à jour visibilité:', error);
+                        setIsPublic(!newValue);
+                      }
+                    }}
+                    className="w-5 h-5 accent-green-600"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <strong>Apparaître dans les profils publics 🌍</strong>
+                    <p className="text-xs opacity-75 mt-1">Votre profil sera visible dans la page communauté</p>
+                  </span>
+                </label>
+              </div>
             </div>
 
             {shareToken && (
@@ -2759,6 +2934,70 @@ const BirdPokedex = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Photo de profil */}
+            <div className={`${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-50'} rounded-lg p-4 border-2 ${currentTheme.border}`}>
+              <h3 className={`font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>🖼️ Photo de profil</h3>
+              <p className={`text-sm mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
+                Choisissez une de vos photos comme photo de profil visible sur la page communauté.
+              </p>
+              {(() => {
+                // Collecter toutes les photos de l'utilisateur
+                const allUserPhotos = [];
+                Object.entries(discoveries).forEach(([birdNum, birdData]) => {
+                  if (birdData.photos) {
+                    birdData.photos.forEach(p => {
+                      if (p.id && p.thumbnail) {
+                        allUserPhotos.push({ id: p.id, thumbnail: p.thumbnail, birdNum });
+                      }
+                    });
+                  }
+                });
+
+                if (allUserPhotos.length === 0) {
+                  return <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Aucune photo disponible. Ajoutez des photos à vos découvertes d'abord.</p>;
+                }
+
+                return (
+                  <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                    {allUserPhotos.slice(0, 20).map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={async () => {
+                          const newId = user?.profile_photo_id === p.id ? null : p.id;
+                          try {
+                            const res = await fetch('/api/profile/photo', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              credentials: 'same-origin',
+                              body: JSON.stringify({ photo_id: newId })
+                            });
+                            if (res.ok) {
+                              setUser(prev => ({ ...prev, profile_photo_id: newId }));
+                            }
+                          } catch (err) {
+                            console.error('Erreur photo profil:', err);
+                          }
+                        }}
+                        className={`relative cursor-pointer rounded-lg overflow-hidden border-4 transition ${
+                          user?.profile_photo_id === p.id
+                            ? 'border-green-500 scale-105'
+                            : `${currentTheme.border} hover:border-blue-400`
+                        }`}
+                        style={{ aspectRatio: '1' }}
+                      >
+                        <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
+                        {user?.profile_photo_id === p.id && (
+                          <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                            <span className="text-2xl">✓</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Informations */}
@@ -3014,6 +3253,7 @@ const BirdPokedex = () => {
                           <tr>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Utilisateur</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Inscription</th>
+                            <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Dernière activité</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Découvertes</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Photos</th>
                             <th className={`px-4 py-3 text-left text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Stockage</th>
@@ -3023,8 +3263,12 @@ const BirdPokedex = () => {
                         <tbody className="divide-y divide-gray-200 dark:divide-slate-600">
                           {adminStats.users.map((u, idx) => (
                             <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-600">
-                              <td className={`px-4 py-3 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{u.username}</td>
-                              <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.created_at}</td>
+                              <td className={`px-4 py-3 font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                                {u.username}
+                                {u.is_admin ? <span className="ml-1 text-xs bg-yellow-400 text-yellow-900 px-1 rounded">admin</span> : null}
+                              </td>
+                              <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+                              <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>{u.last_activity ? new Date(u.last_activity).toLocaleString('fr-FR') : 'Jamais'}</td>
                               <td className="px-4 py-3 text-center">
                                 {u.discoveries_count > 0 ? `✅ ${u.discoveries_count}` : '❌'}
                               </td>
@@ -3039,35 +3283,70 @@ const BirdPokedex = () => {
                                 {u.storage_used ? `${(u.storage_used / (1024 * 1024)).toFixed(1)} MB` : '-'}
                               </td>
                               <td className="px-4 py-3">
-                                <button
-                                  onClick={async () => {
-                                    if (!confirm(`⚠️ Réinitialiser le mot de passe de "${u.username}" ?\n\nUn nouveau mot de passe temporaire sera généré.`)) {
-                                      return;
-                                    }
-
-                                    try {
-                                      const response = await fetch(`/api/admin/reset-password/${u.id}`, {
-                                        method: 'POST',
-                                        credentials: 'same-origin'
-                                      });
-
-                                      const data = await response.json();
-
-                                      if (response.ok) {
-                                        alert(`✅ Mot de passe réinitialisé pour ${data.username}\n\n🔑 Mot de passe temporaire:\n${data.temporary_password}\n\n⚠️ Communiquez ce mot de passe à l'utilisateur de manière sécurisée.`);
-                                      } else {
-                                        alert('❌ Erreur: ' + data.error);
+                                <div className="flex flex-wrap gap-1">
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`⚠️ Réinitialiser le mot de passe de "${u.username}" ?\n\nUn nouveau mot de passe temporaire sera généré.`)) return;
+                                      try {
+                                        const response = await fetch(`/api/admin/reset-password/${u.id}`, { method: 'POST', credentials: 'same-origin' });
+                                        const data = await response.json();
+                                        if (response.ok) {
+                                          alert(`✅ Mot de passe réinitialisé pour ${data.username}\n\n🔑 Mot de passe temporaire:\n${data.temporary_password}\n\n⚠️ Communiquez ce mot de passe à l'utilisateur de manière sécurisée.`);
+                                        } else {
+                                          alert('❌ Erreur: ' + data.error);
+                                        }
+                                      } catch (error) {
+                                        alert('❌ Erreur lors de la réinitialisation du mot de passe');
                                       }
-                                    } catch (error) {
-                                      console.error('Erreur:', error);
-                                      alert('❌ Erreur lors de la réinitialisation du mot de passe');
-                                    }
-                                  }}
-                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1 rounded transition"
-                                  title="Réinitialiser le mot de passe"
-                                >
-                                  🔒 Reset MDP
-                                </button>
+                                    }}
+                                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1 rounded transition"
+                                    title="Réinitialiser le mot de passe"
+                                  >
+                                    🔒 Reset MDP
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const response = await fetch(`/api/admin/user-photos/${u.id}`, { credentials: 'same-origin' });
+                                        const data = await response.json();
+                                        if (response.ok) {
+                                          setAdminViewUserPhotos(data);
+                                        } else {
+                                          alert('❌ ' + data.error);
+                                        }
+                                      } catch (error) {
+                                        alert('❌ Erreur lors du chargement des photos');
+                                      }
+                                    }}
+                                    className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition"
+                                    title="Voir les photos"
+                                  >
+                                    📷 Photos
+                                  </button>
+                                  {!u.is_admin && (
+                                    <button
+                                      onClick={async () => {
+                                        if (!confirm(`⚠️ SUPPRIMER DÉFINITIVEMENT le compte "${u.username}" ?\n\nToutes ses photos et découvertes seront perdues. Cette action est IRRÉVERSIBLE.`)) return;
+                                        try {
+                                          const response = await fetch(`/api/admin/delete-user/${u.id}`, { method: 'DELETE', credentials: 'same-origin' });
+                                          const data = await response.json();
+                                          if (response.ok) {
+                                            alert(`✅ Compte "${data.deleted_username}" supprimé.`);
+                                            loadAdminStats();
+                                          } else {
+                                            alert('❌ ' + data.error);
+                                          }
+                                        } catch (error) {
+                                          alert('❌ Erreur lors de la suppression');
+                                        }
+                                      }}
+                                      className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded transition"
+                                      title="Supprimer le compte"
+                                    >
+                                      🗑️ Supprimer
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -3188,10 +3467,171 @@ const BirdPokedex = () => {
     );
   };
 
+  // Modal partage découverte (Instagram story)
+  const ShareDiscoveryModal = () => {
+    if (!shareDiscoveryModal) return null;
+    const { bird, photo } = shareDiscoveryModal;
+
+    const generateStoryImage = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+
+      // Fond dégradé
+      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+      grad.addColorStop(0, '#1a3a1a');
+      grad.addColorStop(1, '#0a1a0a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1080, 1920);
+
+      const img = new window.Image();
+      img.onload = () => {
+        // Photo centrée
+        const aspect = img.width / img.height;
+        let drawW = 1080, drawH = 1080 / aspect;
+        if (drawH > 1400) { drawH = 1400; drawW = 1400 * aspect; }
+        const x = (1080 - drawW) / 2;
+        const y = (1920 - drawH) / 2 - 100;
+        ctx.drawImage(img, x, y, drawW, drawH);
+
+        // Overlay bas
+        const overlay = ctx.createLinearGradient(0, y + drawH - 200, 0, y + drawH + 300);
+        overlay.addColorStop(0, 'rgba(0,0,0,0)');
+        overlay.addColorStop(1, 'rgba(0,0,0,0.85)');
+        ctx.fillStyle = overlay;
+        ctx.fillRect(0, y + drawH - 200, 1080, 500);
+
+        // Texte
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 72px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(bird.nom_francais, 540, y + drawH + 80);
+
+        ctx.fillStyle = '#a8d5a2';
+        ctx.font = 'italic 42px sans-serif';
+        ctx.fillText(bird.nom_scientifique, 540, y + drawH + 140);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '36px sans-serif';
+        ctx.fillText('🐦 BIRDEX', 540, y + drawH + 220);
+
+        // Télécharger
+        const link = document.createElement('a');
+        link.download = `birdex_${bird.nom_francais.replace(/ /g, '_')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      };
+      img.src = photo;
+    };
+
+    const handleNativeShare = async () => {
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: `J'ai découvert : ${bird.nom_francais}`,
+            text: `${bird.nom_francais} (${bird.nom_scientifique}) - Découvert sur BIRDEX ! #birdex #ornithologie`,
+            url: window.location.origin
+          });
+        } else {
+          generateStoryImage();
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') generateStoryImage();
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-6 text-white text-center">
+            <div className="text-5xl mb-2">🎉</div>
+            <h2 className="text-2xl font-bold">Nouvelle découverte !</h2>
+            <p className="text-green-200 text-sm mt-1">#{bird.number}</p>
+          </div>
+
+          {/* Photo + info */}
+          <div className="p-6 text-center">
+            {photo && (
+              <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-green-500 mb-4 shadow-lg">
+                <img src={photo} alt={bird.nom_francais} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">{bird.nom_francais}</h3>
+            <p className="text-sm italic text-gray-500 dark:text-gray-400">{bird.nom_scientifique}</p>
+          </div>
+
+          {/* Actions */}
+          <div className="px-6 pb-6 space-y-3">
+            <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-2">Partager cette découverte :</p>
+
+            <button
+              onClick={handleNativeShare}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+            >
+              📱 Partager / Instagram Story
+            </button>
+
+            <button
+              onClick={generateStoryImage}
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+            >
+              💾 Télécharger l'image story
+            </button>
+
+            <button
+              onClick={() => setShareDiscoveryModal(null)}
+              className="w-full bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+            >
+              ✕ Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal photos admin
+  const AdminUserPhotosModal = () => {
+    if (!adminViewUserPhotos) return null;
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+          <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-slate-600">
+            <h3 className="font-bold text-lg dark:text-white">📷 Photos de {adminViewUserPhotos.username}</h3>
+            <button onClick={() => setAdminViewUserPhotos(null)} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+          </div>
+          <div className="overflow-y-auto p-4">
+            {adminViewUserPhotos.photos.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">Aucune photo</p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {adminViewUserPhotos.photos.map((p) => (
+                  <div key={p.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                    {p.photo_thumbnail ? (
+                      <img src={p.photo_thumbnail} alt={p.bird_number} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-2xl">🦅</div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate">
+                      #{p.bird_number}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <DebugPanel />
-      {null}
+      <ShareDiscoveryModal />
+      <AdminUserPhotosModal />
     </>
   );
 

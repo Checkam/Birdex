@@ -216,6 +216,35 @@ def add_show_map_column():
 
 add_show_map_column()
 
+# Migration: Ajouter les nouvelles colonnes profil
+def add_profile_columns():
+    """Ajoute les colonnes profile_photo_id, profile_visits, last_activity, is_public à la table users"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    try:
+        c.execute("PRAGMA table_info(users)")
+        columns = [column[1] for column in c.fetchall()]
+
+        if 'profile_photo_id' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN profile_photo_id INTEGER DEFAULT NULL")
+            logger.info("✓ Colonne profile_photo_id ajoutée")
+        if 'profile_visits' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN profile_visits INTEGER DEFAULT 0")
+            logger.info("✓ Colonne profile_visits ajoutée")
+        if 'last_activity' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP DEFAULT NULL")
+            logger.info("✓ Colonne last_activity ajoutée")
+        if 'is_public' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN is_public INTEGER DEFAULT 1")
+            logger.info("✓ Colonne is_public ajoutée")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Erreur migration colonnes profil: {e}")
+    finally:
+        conn.close()
+
+add_profile_columns()
+
 # ============================================================================
 # MIDDLEWARE DE LOGGING ET DEBUGGING
 # ============================================================================
@@ -440,6 +469,11 @@ def login():
         session.permanent = True
         session['user_id'] = user['id']
         session['username'] = user['username']
+        # Mettre à jour last_activity
+        conn2 = get_db()
+        conn2.execute("UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = ?", (user['id'],))
+        conn2.commit()
+        conn2.close()
         return jsonify({"success": True, "username": user['username']})
     else:
         return jsonify({"error": "Identifiants incorrects"}), 401
@@ -454,8 +488,9 @@ def get_current_user():
     if 'user_id' in session:
         conn = get_db()
         c = conn.cursor()
-        user = c.execute("SELECT theme, is_admin FROM users WHERE id = ?",
-                        (session['user_id'],)).fetchone()
+        user = c.execute(
+            "SELECT theme, is_admin, profile_photo_id, profile_visits, is_public FROM users WHERE id = ?",
+            (session['user_id'],)).fetchone()
         conn.close()
 
         return jsonify({
@@ -463,7 +498,10 @@ def get_current_user():
             "username": session['username'],
             "user_id": session['user_id'],
             "theme": user['theme'] if user else 'pokemon',
-            "is_admin": bool(user['is_admin']) if user else False
+            "is_admin": bool(user['is_admin']) if user else False,
+            "profile_photo_id": user['profile_photo_id'] if user else None,
+            "profile_visits": user['profile_visits'] if user else 0,
+            "is_public": bool(user['is_public']) if user else True
         })
     else:
         return jsonify({"logged_in": False})
@@ -661,6 +699,9 @@ def save_discoveries():
                         sanitize_input(photo_data.get('sex', '')),
                         sanitize_input(photo_data.get('note', ''))
                     ))
+
+        # Mettre à jour last_activity
+        c.execute("UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
 
         conn.commit()
         logger.info(f"✓ Données sauvegardées avec succès pour user_id={user_id}")
@@ -940,19 +981,32 @@ def get_share_token():
     conn = get_db()
     c = conn.cursor()
 
-    user = c.execute("SELECT share_token, show_map FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = c.execute(
+        "SELECT share_token, show_map, profile_visits, is_public FROM users WHERE id = ?",
+        (user_id,)).fetchone()
 
     if not user or not user['share_token']:
         share_token = str(uuid.uuid4())
         c.execute("UPDATE users SET share_token = ? WHERE id = ?", (share_token, user_id))
         conn.commit()
+        # Re-fetch
+        user = c.execute(
+            "SELECT share_token, show_map, profile_visits, is_public FROM users WHERE id = ?",
+            (user_id,)).fetchone()
     else:
         share_token = user['share_token']
 
     show_map = user['show_map'] if user['show_map'] is not None else 1
+    profile_visits = user['profile_visits'] if user['profile_visits'] is not None else 0
+    is_public = user['is_public'] if user['is_public'] is not None else 1
 
     conn.close()
-    return jsonify({"share_token": share_token, "show_map": show_map})
+    return jsonify({
+        "share_token": share_token,
+        "show_map": show_map,
+        "profile_visits": profile_visits,
+        "is_public": bool(is_public)
+    })
 
 @app.route('/api/share/regenerate', methods=['POST'])
 def regenerate_share_token():
@@ -976,7 +1030,7 @@ def get_shared_profile(token):
     c = conn.cursor()
 
     user = c.execute("""
-        SELECT id, username, created_at, theme, show_map
+        SELECT id, username, created_at, theme, show_map, profile_photo_id, profile_visits, last_activity
         FROM users
         WHERE share_token = ?
     """, (token,)).fetchone()
@@ -985,10 +1039,25 @@ def get_shared_profile(token):
         conn.close()
         return jsonify({"error": "Profil non trouvé"}), 404
 
+    # Incrémenter le compteur de visites (sauf si c'est le propriétaire lui-même)
+    viewer_id = session.get('user_id')
+    if viewer_id != user['id']:
+        c.execute("UPDATE users SET profile_visits = COALESCE(profile_visits, 0) + 1 WHERE id = ?", (user['id'],))
+        conn.commit()
+
+    # Récupérer la photo de profil si définie
+    profile_photo_data = None
+    if user['profile_photo_id']:
+        profile_photo_row = c.execute(
+            "SELECT photo_thumbnail FROM photos WHERE id = ?", (user['profile_photo_id'],)
+        ).fetchone()
+        if profile_photo_row:
+            profile_photo_data = profile_photo_row['photo_thumbnail']
+
     # Récupérer les découvertes
     discoveries = c.execute("""
         SELECT d.bird_number,
-               p.photo_data, p.location, p.city, p.region,
+               p.id as photo_id, p.photo_data, p.location, p.city, p.region,
                p.country, p.coordinates, p.date, p.sex, p.note
         FROM discoveries d
         LEFT JOIN photos p ON d.id = p.discovery_id
@@ -1036,7 +1105,9 @@ def get_shared_profile(token):
         "show_map": user['show_map'] if user['show_map'] is not None else 1,
         "discovered_count": len(discoveries_data),
         "total_photos": sum(len(d['photos']) for d in discoveries_data.values()),
-        "discoveries": discoveries_data
+        "discoveries": discoveries_data,
+        "profile_photo": profile_photo_data,
+        "last_activity": user['last_activity']
     })
 
 # ============================================================================
@@ -1073,7 +1144,7 @@ def get_admin_stats():
     storage_mb = (storage['total'] or 0) / (1024 * 1024)
 
     user_stats = c.execute("""
-        SELECT u.id, u.username, u.created_at,
+        SELECT u.id, u.username, u.created_at, u.last_activity, u.is_admin,
                COUNT(DISTINCT d.id) as discoveries_count,
                COUNT(p.id) as photos_count,
                SUM(p.file_size) as storage_used
@@ -1094,6 +1165,175 @@ def get_admin_stats():
         "storage_mb": round(storage_mb, 2),
         "users": [dict(row) for row in user_stats]
     })
+
+@app.route('/api/admin/delete-user/<int:user_id>', methods=['DELETE'])
+def admin_delete_user(user_id):
+    """Admin: Supprimer un compte utilisateur et toutes ses données"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    # Empêcher la suppression de son propre compte
+    if user_id == session['user_id']:
+        conn.close()
+        return jsonify({"error": "Vous ne pouvez pas supprimer votre propre compte"}), 400
+
+    target = c.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not target:
+        conn.close()
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+
+    # Supprimer l'utilisateur (CASCADE supprime photos, discoveries, messages)
+    c.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"Admin {session['username']} a supprimé l'utilisateur {target['username']} (id={user_id})")
+    return jsonify({"status": "success", "deleted_username": target['username']})
+
+
+@app.route('/api/admin/user-photos/<int:user_id>', methods=['GET'])
+def admin_get_user_photos(user_id):
+    """Admin: Voir les photos d'un utilisateur"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    conn = get_db()
+    c = conn.cursor()
+
+    admin = c.execute("SELECT is_admin FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    if not admin or not admin['is_admin']:
+        conn.close()
+        return jsonify({"error": "Accès refusé - Admin requis"}), 403
+
+    target = c.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not target:
+        conn.close()
+        return jsonify({"error": "Utilisateur non trouvé"}), 404
+
+    photos = c.execute("""
+        SELECT p.id, p.bird_number, p.photo_thumbnail, p.location, p.date, p.file_size, p.created_at
+        FROM photos p
+        WHERE p.user_id = ?
+        ORDER BY p.created_at DESC
+        LIMIT 100
+    """, (user_id,)).fetchall()
+
+    conn.close()
+    return jsonify({
+        "username": target['username'],
+        "photos": [dict(row) for row in photos]
+    })
+
+
+@app.route('/api/profiles', methods=['GET'])
+def get_public_profiles():
+    """Liste tous les profils publics avec leurs statistiques"""
+    conn = get_db()
+    c = conn.cursor()
+
+    profiles = c.execute("""
+        SELECT u.id, u.username, u.created_at, u.last_activity,
+               u.profile_photo_id,
+               COUNT(DISTINCT d.id) as discovered_count,
+               COUNT(p.id) as photos_count
+        FROM users u
+        LEFT JOIN discoveries d ON u.id = d.user_id
+        LEFT JOIN photos p ON u.id = p.user_id
+        WHERE u.share_token IS NOT NULL
+          AND (u.is_public IS NULL OR u.is_public = 1)
+        GROUP BY u.id
+        ORDER BY u.last_activity DESC NULLS LAST, u.created_at DESC
+    """).fetchall()
+
+    result = []
+    for row in profiles:
+        profile_photo = None
+        if row['profile_photo_id']:
+            photo_row = c.execute(
+                "SELECT photo_thumbnail FROM photos WHERE id = ?", (row['profile_photo_id'],)
+            ).fetchone()
+            if photo_row:
+                profile_photo = photo_row['photo_thumbnail']
+
+        # Si pas de photo de profil, prendre la première photo disponible
+        if not profile_photo:
+            first_photo = c.execute(
+                "SELECT photo_thumbnail FROM photos WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (row['id'],)
+            ).fetchone()
+            if first_photo:
+                profile_photo = first_photo['photo_thumbnail']
+
+        # Récupérer le share_token pour le lien du profil
+        token_row = c.execute("SELECT share_token FROM users WHERE id = ?", (row['id'],)).fetchone()
+
+        result.append({
+            "username": row['username'],
+            "share_token": token_row['share_token'] if token_row else None,
+            "discovered_count": row['discovered_count'],
+            "photos_count": row['photos_count'],
+            "profile_photo": profile_photo,
+            "last_activity": row['last_activity'],
+            "member_since": row['created_at']
+        })
+
+    conn.close()
+    return jsonify(result)
+
+
+@app.route('/api/profile/photo', methods=['POST'])
+def set_profile_photo():
+    """Définit la photo de profil de l'utilisateur"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    data = request.json
+    photo_id = data.get('photo_id')
+
+    conn = get_db()
+    c = conn.cursor()
+
+    if photo_id is not None:
+        # Vérifier que la photo appartient à l'utilisateur
+        photo = c.execute("SELECT id FROM photos WHERE id = ? AND user_id = ?",
+                         (photo_id, session['user_id'])).fetchone()
+        if not photo:
+            conn.close()
+            return jsonify({"error": "Photo non trouvée"}), 404
+
+    c.execute("UPDATE users SET profile_photo_id = ? WHERE id = ?",
+              (photo_id, session['user_id']))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success", "profile_photo_id": photo_id})
+
+
+@app.route('/api/profile/visibility', methods=['POST'])
+def set_profile_visibility():
+    """Active ou désactive la visibilité du profil dans la page publique"""
+    if 'user_id' not in session:
+        return jsonify({"error": "Non authentifié"}), 401
+
+    data = request.json
+    is_public = 1 if data.get('is_public', True) else 0
+
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE users SET is_public = ? WHERE id = ?", (is_public, session['user_id']))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success", "is_public": bool(is_public)})
+
 
 @app.route('/api/admin/promote/<int:user_id>', methods=['POST'])
 def promote_user(user_id):
