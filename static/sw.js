@@ -1,19 +1,19 @@
-const CACHE_NAME = 'birdex-v1.0.6';
-const RUNTIME_CACHE = 'birdex-runtime-v1.0.6';
+const CACHE_NAME = 'birdex-v1.0.7';
+const RUNTIME_CACHE = 'birdex-runtime-v1.0.7';
 
 // Ressources à mettre en cache lors de l'installation
+// NOTE: Only cache own files. CDN resources like tailwindcss.com
+// don't send CORS headers, causing cache.addAll to fail atomically.
+// CDN resources are handled at runtime with graceful fallback.
 const PRECACHE_URLS = [
   '/',
   '/static/app.js',
+  '/static/tailwind.js',
+  '/static/babel.min.js',
+  '/static/react.production.min.js',
+  '/static/react-dom.production.min.js',
   '/static/logo.png',
-  '/static/manifest.json',
-  // CDN resources (cache these for offline support)
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js',
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  '/static/manifest.json'
 ];
 
 // Installation du Service Worker
@@ -88,11 +88,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stratégie pour les assets statiques et CDN: Cache First
+  // Stratégie pour les assets statiques et CDN (unpkg only): Cache First
+  // tailwindcss CDN is NOT intercepted — it doesn't send CORS headers.
+  // Note: React, Babel, Tailwind are now self-hosted under /static/
   if (
     url.pathname.startsWith('/static/') ||
-    url.origin.includes('unpkg.com') ||
-    url.origin.includes('cdn.tailwindcss.com')
+    url.origin.includes('unpkg.com')
   ) {
     event.respondWith(
       caches.match(request)
